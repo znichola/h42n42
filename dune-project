@@ -1,26 +1,10 @@
-(lang dune 3.19)
+(lang dune 3.14)
 
-(name h42n42)
+(dialect
+ (name "eliom-server")
+ (implementation (extension "eliom"))
+ (interface (extension "eliomi")))
 
-(generate_opam_files true)
+(wrapped_executables false)
 
-(source
- (github znichola/h42n42))
-
-(authors "Nicholas Zivkovic <author@example.com>")
-
-(maintainers "Nicholas Zivkovic <maintainer@example.com>")
-
-(license LICENSE)
-
-(documentation https://url/to/documentation)
-
-(package
- (name h42n42)
- (synopsis "A short synopsis")
- (description "A longer description")
- (depends ocaml)
- (tags
-  ("42 Nice" your project)))
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
+(formatting (enabled_for ocaml "eliom-server"))
