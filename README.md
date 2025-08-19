@@ -1,8 +1,11 @@
 # h42n42
 
-OCaml in the browser!
+Simulate the life of a population of creatures threatened by a terrifying virus.
+
+Also, OCaml in the browser!
 
 > A project introducing the OCSIGEN framework, used to create rich applications in OCaml. The goal is to design a simulator of bugs escaping a dangerous virus.
+
 
 ## OCaml commands
 
@@ -20,7 +23,33 @@ opam exec -- dune utop
 opam install sexplib
 ```
 
+## Eliom comands
+
+See [README_ELIOM.md](/README_ELIOM.md) for mroe details.
+
+```bash
+# Build the website
+make all
+
+# Put website files in local/var/www/h42n42
+make install
+
+# Start the server
+make run
+
+# Build and run the server
+make test.byte
+```
+
+## Thoughts
+
+Untangling this OCaml shaped mess.
+
+The OCSIGEN framework is some big group of modules, Eliom is also a fullstack framework? Not sure that the diff is, but Eliom docs tutorials align more with what the subject wants.
+
+
 ## Links
 
 [getting started with Ocaml](https://ocaml.org/docs/tour-of-ocaml)
 [getting started with Ocsigen](https://ocsigen.org/tuto/latest/manual/basics)
+[using eliom](https://ocsigen.org/tuto/latest/manual/application)
