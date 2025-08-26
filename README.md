@@ -23,6 +23,14 @@ opam exec -- dune utop
 opam install sexplib
 ```
 
+## Utop commands
+
+```utop
+(* load a file to run it's functions *)
+#use "bin/main.ml"
+```
+
+
 ## Eliom comands
 
 See [README_ELIOM.md](/README_ELIOM.md) for mroe details.
@@ -40,6 +48,7 @@ make run
 # Build and run the server
 make test.byte
 ```
+
 
 ## Thoughts
 
