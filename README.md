@@ -23,6 +23,14 @@ opam exec -- dune utop
 opam install sexplib
 ```
 
+## Utop commands
+
+```utop
+(* load a file to run it's functions *)
+#use "bin/main.ml"
+```
+
+
 ## Eliom comands
 
 See [README_ELIOM.md](/README_ELIOM.md) for mroe details.
@@ -41,6 +49,7 @@ make run
 make test.byte
 ```
 
+
 ## Thoughts
 
 Untangling this OCaml shaped mess.
@@ -53,3 +62,34 @@ The OCSIGEN framework is some big group of modules, Eliom is also a fullstack fr
 [getting started with Ocaml](https://ocaml.org/docs/tour-of-ocaml)
 [getting started with Ocsigen](https://ocsigen.org/tuto/latest/manual/basics)
 [using eliom](https://ocsigen.org/tuto/latest/manual/application)
+
+
+## Installing OCaml on school computers
+
+```
+
+Run bash line to download opam to a folder in sgoinfre, put this in `PATH` by modifying the `.zshrc`.
+
+```zsh
+bash -c "sh <(curl -fsSL https://opam.ocaml.org/install.sh)"
+```
+
+Then init opam by telling it where the root should be so it's got the space to install.
+
+```zsh
+opam init --root="~/sgoinfre/.opam"
+```
+
+Add this line to `.zshrc` to tell opam where it's root is.
+
+```zshrc
+export OPAMROOT=/sgoinfre/znichola/.opam
+```
+
+
+### Runing in Docker
+
+```zsh
+docker run -v .:/home/opam/app -w /home/opam/app  -it --rm ocaml/opam:debian
+```
+
