@@ -62,7 +62,8 @@ The OCSIGEN framework is some big group of modules, Eliom is also a fullstack fr
 - [getting started with Ocaml](https://ocaml.org/docs/tour-of-ocaml)
 - [getting started with Ocsigen](https://ocsigen.org/tuto/latest/manual/basics)
 - [using eliom](https://ocsigen.org/tuto/latest/manual/application)
-
+- [Html.F vs HTML.D](https://ocsigen.org/eliom/latest/manual/clientserver-html#unique)
+- [demo_read.eliom](https://github.com/ocsigen/ocsigen-start/blob/master/template.distillery/demo_react.eliom)
 
 ## Installing OCaml on school computers
 

@@ -28,11 +28,16 @@ let%server main_service =
 (* Insert into the client client context the server defined value *)
 let%client main_service = ~%main_service
 
+[%%client open Js_of_ocaml_lwt]
+[%%shared open Eliom_content]
+[%%shared open Html.D]
+open%shared Lwt.Syntax
+
 (* Register and implement the handler to the *)
 let%shared () =
   App.register ~service:main_service (fun () () ->
     Lwt.return
-      Eliom_content.Html.F.(
+      Html.F.(
         html
           (head
              (title (txt "h42n42"))
@@ -43,3 +48,4 @@ let%shared () =
                       ["css"; "h42n42.css"])
                  () ])
           (body [h1 [txt "Welcome to Eliom!"]])))
+
