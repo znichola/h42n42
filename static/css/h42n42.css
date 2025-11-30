@@ -60,3 +60,22 @@
 .hud-stats div {
   margin: 3px 0;
 }
+
+.creeps-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.creep {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+  pointer-events: none;
+  user-select: none;
+}

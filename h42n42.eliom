@@ -30,8 +30,10 @@ let%client main_service = ~%main_service
 
 [%%shared open Eliom_content]
 [%%client open Js_of_ocaml]
+[%%client open Js_of_ocaml_lwt]
 [%%client open Js_of_ocaml.Dom_html]
 [%%client open Html.D]
+[%%client open Lwt.Syntax]
 
 (* Imports from some tutorial, keeping here in case it's needed later *)
 (* [%%client open Js_of_ocaml_lwt] *)
@@ -94,6 +96,7 @@ let%client get_section (part_height, y_height) =
 let%client hud_component () =
   let mouse_x = ref 0 in
   let mouse_y = ref 0 in
+  let creep_count = ref 0 in
   let stats_container = div ~a:[a_class ["hud-stats"]] [] in
   
   let update_stats () =
@@ -103,6 +106,7 @@ let%client hud_component () =
       [ div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
       ; div [txt (Printf.sprintf "Mouse: (%d, %d)" !mouse_x !mouse_y)]
       ; div [txt (Printf.sprintf "Inside: %s" current_section)]
+      ; div [txt (Printf.sprintf "Creeps: %d" !creep_count)]
       ]
   in
   
@@ -133,10 +137,114 @@ let%client hud_component () =
     ~a:[a_class ["hud"]]
     [ div
         ~a:[a_class ["hud-content"]]
-        [ div [txt "simulation pending"]
+        [ div [txt "simulation running"]
         ; stats_container
         ]
-    ]
+    ], creep_count, update_stats
+
+(* --------------- *)
+(* CREEP COMPONENT *)
+(* --------------- *)
+
+[%%client
+type creep_state = {
+  mutable x: float;
+  mutable y: float;
+  mutable vx: float;
+  mutable vy: float;
+  _id: int;
+  element: Html_types.div Html.elt;
+}
+]
+
+
+(* Sleep function using Lwt *)
+let%client sleep duration =
+  let%lwt () = Lwt_js.sleep duration in
+  Lwt.return_unit
+
+(* Create a single creep *)
+let%client create_creep id start_x start_y =
+  let creep_div = div ~a:[a_class ["creep"]] [txt "🐛"] in
+  let creep = {
+    x = start_x;
+    y = start_y;
+    vx = Random.float 2.0 -. 1.0;  (* Random velocity between -1 and 1 *)
+    vy = Random.float 2.0 -. 1.0;
+    _id = id;
+    element = creep_div;
+  } in
+  creep
+
+(* Update creep position *)
+let%client update_creep_position creep =
+  let (width, height, _) = get_stats () in
+  let width_f = float_of_int width in
+  let height_f = float_of_int height in
+  
+  (* Update position *)
+  creep.x <- creep.x +. creep.vx;
+  creep.y <- creep.y +. creep.vy;
+  
+  (* Bounce off walls *)
+  if creep.x <= 0.0 || creep.x >= width_f -. 20.0 then
+    creep.vx <- -.creep.vx;
+  if creep.y <= 0.0 || creep.y >= height_f -. 20.0 then
+    creep.vy <- -.creep.vy;
+  
+  (* Clamp position *)
+  creep.x <- max 0.0 (min (width_f -. 20.0) creep.x);
+  creep.y <- max 0.0 (min (height_f -. 20.0) creep.y);
+  
+  (* Update DOM element style *)
+  let creep_element = Eliom_content.Html.To_dom.of_div creep.element in
+  creep_element##.style##.left := Js.string (Printf.sprintf "%.2fpx" creep.x);
+  creep_element##.style##.top := Js.string (Printf.sprintf "%.2fpx" creep.y)
+
+(* Simulation loop for a single creep using Lwt *)
+let%client rec simulate_creep creep =
+  let* () = sleep 0.016 in (* ~60 FPS *)
+  update_creep_position creep;
+  simulate_creep creep
+
+(* Creeps container component *)
+let%client creeps_component creep_count_ref update_stats_fn =
+  let container = div ~a:[a_class ["creeps-container"]] [] in
+  let creeps = ref [] in
+  
+  (* Spawn a new creep *)
+  let spawn_creep () =
+    let (width, height, _) = get_stats () in
+    let id = List.length !creeps in
+    let start_x = Random.float (float_of_int width -. 20.0) in
+    let start_y = Random.float (float_of_int height -. 20.0) in
+    let creep = create_creep id start_x start_y in
+    
+    (* Add creep to container *)
+    Eliom_content.Html.Manip.appendChild container creep.element;
+    creeps := creep :: !creeps;
+    creep_count_ref := List.length !creeps;
+    update_stats_fn ();
+    
+    (* Start simulation for this creep *)
+    let _ = simulate_creep creep in
+    ()
+  in
+  
+  (* Spawn initial creeps *)
+  for _i = 0 to 4 do
+    spawn_creep ()
+  done;
+  
+  (* Spawn new creeps periodically *)
+  let rec spawn_loop () =
+    let* () = sleep 3.0 in (* Spawn every 3 seconds *)
+    spawn_creep ();
+    spawn_loop ()
+  in
+  let _ = spawn_loop () in
+  
+  container
 
 (* Register and implement handlers and setup the index layout*)
 let%shared () =
@@ -154,7 +262,9 @@ let%shared () =
                  () ])
           (body 
             [ Html.C.node [%client world_component ()]
-            ; Html.C.node [%client hud_component ()]
+            ; Html.C.node [%client 
+                let (hud, creep_count, update_stats) = hud_component () in
+                let creeps = creeps_component creep_count update_stats in
+                div [hud; creeps]
+              ]
             ])))
-
-
