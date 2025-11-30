@@ -28,12 +28,36 @@ let%server main_service =
 (* Insert into the client client context the server defined value *)
 let%client main_service = ~%main_service
 
-[%%client open Js_of_ocaml_lwt]
 [%%shared open Eliom_content]
-[%%shared open Html.D]
-open%shared Lwt.Syntax
+(* [%%client open Js_of_ocaml] *)
+[%%client open Html.D]
 
-(* Register and implement the handler to the *)
+(* Imports from some tutorial, keeping here in case it's needed later *)
+(* [%%client open Js_of_ocaml_lwt] *)
+(* [%%shared open Html.D] *)
+(* open%shared Lwt.Syntax *)
+
+(* Client-side counter logic *)
+let%client counter_widget () =
+  let count = ref 0 in
+  let count_display = span [txt "0"] in
+  let increment_button =
+    button
+      ~a:[a_onclick (fun _ ->
+        count := !count + 1;
+        Eliom_content.Html.Manip.replaceChildren count_display
+          [txt (string_of_int !count)];
+        )]
+      [txt "Increment"]
+  in
+  div
+    ~a:[a_class ["counter"]]
+    [ h2 [txt "Client-Side Counter"]
+    ; p [txt "Current count: "; count_display]
+    ; increment_button
+    ]
+
+(* Register and implement handlers and setup the index layout*)
 let%shared () =
   App.register ~service:main_service (fun () () ->
     Lwt.return
@@ -47,5 +71,8 @@ let%shared () =
                       ~service:(Eliom_service.static_dir ())
                       ["css"; "h42n42.css"])
                  () ])
-          (body [h1 [txt "Welcome to Eliom!"]])))
+          (body 
+            [ h1 [txt "Welcome to Eliom!"]
+            ; Html.C.node [%client counter_widget ()]
+            ])))
 
