@@ -1,3 +1,62 @@
 * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
     font-family: sans-serif;
+}
+
+.world {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.river {
+    flex: 1;
+    background-color: #a8d8ea;
+}
+
+.grass {
+    flex: 4;
+    background-color: #b8e6b8;
+}
+
+.hospital {
+    flex: 1;
+    background-color: #ffd6e0;
+}
+
+.hud {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.hud-content {
+  background-color: #000000b3;
+  color: #ffffff;
+  padding: 15px 25px;
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 1em;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  box-shadow: 0 4px 6px #0000004d;
+  border: 1px solid #ffffff33;
+  text-align: center;
+}
+
+.hud-stats {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ffffff4d;
+  font-size: 0.8em;
+  line-height: 1.6;
+}
+
+.hud-stats div {
+  margin: 3px 0;
 }

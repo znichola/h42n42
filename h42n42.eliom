@@ -29,7 +29,8 @@ let%server main_service =
 let%client main_service = ~%main_service
 
 [%%shared open Eliom_content]
-(* [%%client open Js_of_ocaml] *)
+[%%client open Js_of_ocaml]
+[%%client open Js_of_ocaml.Dom_html]
 [%%client open Html.D]
 
 (* Imports from some tutorial, keeping here in case it's needed later *)
@@ -38,7 +39,7 @@ let%client main_service = ~%main_service
 (* open%shared Lwt.Syntax *)
 
 (* Client-side counter logic *)
-let%client counter_widget () =
+let%client _counter_widget () =
   let count = ref 0 in
   let count_display = span [txt "0"] in
   let increment_button =
@@ -57,6 +58,86 @@ let%client counter_widget () =
     ; increment_button
     ]
 
+
+(* World component *)
+let%client world_component () =
+  Html.D.div
+    ~a:[Html.D.a_class ["world"]]
+    [ Html.D.div ~a:[Html.D.a_class ["river"]] []
+    ; Html.D.div ~a:[Html.D.a_class ["grass"]] []
+    ; Html.D.div ~a:[Html.D.a_class ["hospital"]] []
+    ]
+
+(* ------------- *)
+(* HUB COMPONENT *)
+(* ------------- *)
+
+(* Get stats function *)
+let%client get_stats () =
+  let width = window##.innerWidth in
+  let height = window##.innerHeight in
+  let total_parts = 6 in (* 1 + 4 + 1 *)
+  let part_height = float_of_int height /. float_of_int total_parts in
+  (width, height, part_height)
+
+let%client get_section (part_height, y_height) = 
+  let river_end = part_height in
+  let grass_end = part_height +. (4.0 *. part_height) in
+  let section = 
+    if y_height < river_end then "River"
+    else if y_height < grass_end then "Grass"
+    else "Hospital"
+  in
+  section
+
+(* HUD component *)
+let%client hud_component () =
+  let mouse_x = ref 0 in
+  let mouse_y = ref 0 in
+  let stats_container = div ~a:[a_class ["hud-stats"]] [] in
+  
+  let update_stats () =
+    let (width, height, part_height) = get_stats () in
+    let current_section = get_section (part_height, float_of_int !mouse_y) in
+    Eliom_content.Html.Manip.replaceChildren stats_container
+      [ div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
+      ; div [txt (Printf.sprintf "Mouse: (%d, %d)" !mouse_x !mouse_y)]
+      ; div [txt (Printf.sprintf "Inside: %s" current_section)]
+      ]
+  in
+  
+  (* Initial update *)
+  update_stats ();
+  
+  (* Add resize event listener *)
+  let _ = Dom_html.addEventListener 
+    window 
+    (Dom_html.Event.resize)
+    (Dom_html.handler (fun _ -> update_stats (); Js._true))
+    Js._false
+  in
+  
+  (* Add mousemove event listener *)
+  let _ = Dom_html.addEventListener 
+    window 
+    (Dom_html.Event.mousemove)
+    (Dom_html.handler (fun evt -> 
+      mouse_x := evt##.clientX;
+      mouse_y := evt##.clientY;
+      update_stats (); 
+      Js._true))
+    Js._false
+  in
+  
+  div
+    ~a:[a_class ["hud"]]
+    [ div
+        ~a:[a_class ["hud-content"]]
+        [ div [txt "simulation pending"]
+        ; stats_container
+        ]
+    ]
+
 (* Register and implement handlers and setup the index layout*)
 let%shared () =
   App.register ~service:main_service (fun () () ->
@@ -72,7 +153,8 @@ let%shared () =
                       ["css"; "h42n42.css"])
                  () ])
           (body 
-            [ h1 [txt "Welcome to Eliom!"]
-            ; Html.C.node [%client counter_widget ()]
+            [ Html.C.node [%client world_component ()]
+            ; Html.C.node [%client hud_component ()]
             ])))
+
 
