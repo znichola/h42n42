@@ -74,8 +74,39 @@
 
 .creep {
   position: absolute;
-  width: 20px;
-  height: 20px;
-  font-size: 20px;
+  width: 40px;
+  height: 40px;
+  font-size: 40px;
   cursor: pointer;
+}
+
+.sick {
+  filter: grayscale(70%) drop-shadow(0 0 0.35rem #6b6b6b);
+}
+
+.berserk {
+  animation: berserk-pulse 0.85s infinite ease-in-out;
+  filter: invert(80%) drop-shadow(0 0 0.35rem purple);
+}
+
+.mean {
+  filter: hue-rotate(280deg) contrast(120%) drop-shadow(0 0 0.35rem #f8768d);
+  width: 34px;
+  height: 34px;
+  font-size: 34px;
+}
+
+@keyframes berserk-pulse {
+  0% {
+    filter: invert(80%) drop-shadow(0 0 0.25rem purple);
+    transform: scale(1.0);
+  }
+  50% {
+    filter: invert(80%) drop-shadow(0 0 0.65rem purple);
+    transform: scale(1.08);
+  }
+  100% {
+    filter: invert(80%) drop-shadow(0 0 0.25rem purple);
+    transform: scale(1.0);
+  }
 }

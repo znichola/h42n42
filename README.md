@@ -64,6 +64,7 @@ The OCSIGEN framework is some big group of modules, Eliom is also a fullstack fr
 - [using eliom](https://ocsigen.org/tuto/latest/manual/application)
 - [Html.F vs HTML.D](https://ocsigen.org/eliom/latest/manual/clientserver-html#unique)
 - [demo_read.eliom](https://github.com/ocsigen/ocsigen-start/blob/master/template.distillery/demo_react.eliom)
+- [js of ocamel](https://ocaml.org/p/js_of_ocaml/3.10.0/doc/js_of_ocaml/Js_of_ocaml/Js/index.html)
 
 ## Installing OCaml on school computers
 
@@ -94,4 +95,46 @@ export OPAMROOT=/sgoinfre/znichola/.opam
 docker build -t ocaml_dev_image .
 docker run --rm -it -p 8080:8080 ocaml_dev_image bash -c "make test.byte"
 ```
+
+## Notes on subject
+
+### Creet
+
+- if no more creets game over
+
+- if creet walks into river (or is placed into river) it gets sick
+
+- creet spontaneously reproduces if there is at least one healthy creet
+
+- a healthy creet will never die
+
+- possible to grab move creet
+
+- dropping a creet on a hospital will heal it, (only dropping heals)
+
+- a grabbed creet cannot get contaminated, it's invulnerable
+
+- a creet moves in a straight line, and randomly changed direction
+
+- creets rebound from the edges realistically
+
+- contaminated creets are 15% slower and and have a color
+
+- there is a 2% risk of contamination on contact for each interation,
+(no rebound between creets)
+
+- when a creet gets sick it has a 10% chance of being beserk!
+
+    - a bezerk creet  has a different color, it's slowly grows in size
+        (4x by the end)
+
+- when a creet gets sick it has a 10% chance of being mean
+    - a mean cree has a different color, 15% smaller and runs towards
+        healthy creets
+
+- creet base speed increases over time
+
+- sick creets have a lifetime, afterwhich they will die
+
+
 

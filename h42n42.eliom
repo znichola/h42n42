@@ -124,18 +124,38 @@ let%client hud_component () =
 
 
 (* --------------- *)
+(* Utils           *)
+(* --------------- *)
+
+let%client get_current_time () =
+  let date = new%js Js.date_now in
+  (Js.to_float date##getTime) /. 1000.0
+  [@@warning "-unused-value-declaration"]
+
+
+(* --------------- *)
 (* CREEP COMPONENT *)
 (* --------------- *)
 
 [%%client
+type health_status = 
+  | Healthy
+  | Sick of { lifetime: float }
+  | Berserk of { lifetime: float }
+  | Mean of { lifetime: float }
+[@@warning "-unused-constructor"]
+
 type creep_state = {
   mutable x: float;
   mutable y: float;
   mutable vx: float;
   mutable vy: float;
-  _id: int;
+  id: int;
+  mutable health: health_status;
+  mutable grabbed: bool;
   element: Html_types.div Html.elt;
 }
+[@@warning "-unused-field"]
 ]
 
 (* Global counter for unique IDs *)
@@ -149,19 +169,43 @@ let%client generate_unique_id () =
 
 (* Create a single creep *)
 let%client create_creep id start_x start_y =
-  let creep_div = div ~a:[a_class ["creep"]; a_id (Printf.sprintf "creep-%d" id)] [txt "🐛"] in
-  let creep = {
+  let (health, extra_class) =
+    if id = 3 then
+      (Berserk { lifetime = 10.0 }, "berserk")
+    else if id = 7 then
+      (Mean { lifetime = 10.0 }, "mean")
+    else if id = 1 then
+      (Sick { lifetime = 10.0 }, "sick")
+    else
+      (Healthy, "")
+  in
+
+  (* Add extra class depending on state *)
+  let creep_div =
+    div
+      ~a:[ a_class ["creep"; extra_class]; a_id (Printf.sprintf "creep-%d" id) ] [ txt "🐛" ]
+  in
+
+  (* Initialize creep *)
+  {
     x = start_x;
     y = start_y;
-    vx = Random.float 2.0 -. 1.0;  (* Random velocity between -1 and 1 *)
+    vx = Random.float 2.0 -. 1.0;
     vy = Random.float 2.0 -. 1.0;
-    _id = id;
+    id;
+    grabbed = false;
+    health;
     element = creep_div;
-  } in
-  creep
+  }
 
-(* Update creep position *)
+(* Update creep position *) 
 let%client update_creep_position creep =
+  let size = match creep.health with
+    | Mean _ -> 34.0
+    | Berserk { lifetime } -> 40.0 *. lifetime
+    | _ -> 40.0
+  in
+
   let (width, height, _) = get_stats () in
   let width_f = float_of_int width in
   let height_f = float_of_int height in
@@ -171,14 +215,14 @@ let%client update_creep_position creep =
   creep.y <- creep.y +. creep.vy;
 
   (* Bounce off walls *)
-  if creep.x <= 0.0 || creep.x >= width_f -. 20.0 then
+  if creep.x <= 0.0 || creep.x >= width_f -. size then
     creep.vx <- -.creep.vx;
-  if creep.y <= 0.0 || creep.y >= height_f -. 20.0 then
+  if creep.y <= 0.0 || creep.y >= height_f -. size then
     creep.vy <- -.creep.vy;
 
   (* Clamp position *)
-  creep.x <- max 0.0 (min (width_f -. 20.0) creep.x);
-  creep.y <- max 0.0 (min (height_f -. 20.0) creep.y);
+  creep.x <- max 0.0 (min (width_f -. size) creep.x);
+  creep.y <- max 0.0 (min (height_f -. size) creep.y);
 
   (* Update DOM element style *)
   let creep_element = Eliom_content.Html.To_dom.of_div creep.element in
@@ -200,8 +244,8 @@ let%client creeps_component creep_count_ref update_stats_fn =
   let spawn_creep () =
     let (width, height, _) = get_stats () in
     let id = generate_unique_id () in
-    let start_x = Random.float (float_of_int width -. 20.0) in
-    let start_y = Random.float (float_of_int height -. 20.0) in
+    let start_x = Random.float (float_of_int width -. 40.0) in
+    let start_y = Random.float (float_of_int height -. 40.0) in
     let creep = create_creep id start_x start_y in
 
     (* Add creep to container *)
