@@ -233,6 +233,20 @@ let%client update_creet_position creet =
 let%client rec simulate_creet creet =
   let* () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
   update_creet_position creet;
+  
+  (* Check if creet is in the river *)
+  let (_, _, part_height) = get_stats () in
+  let current_section = get_section (part_height, creet.y) in
+  
+  (match creet.health with
+   | Healthy when current_section = "River" ->
+       creet.health <- Sick { lifetime = 10.0 };
+       (* Update creet element class *)
+       let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
+       creet_element##.classList##add (Js.string "sick")
+   | _ -> ()
+  );
+  
   simulate_creet creet
 
 (* Creets container component *)
