@@ -138,9 +138,18 @@ type creep_state = {
 }
 ]
 
+(* Global counter for unique IDs *)
+let%client next_creep_id = ref 0
+
+(* Generate a unique ID *)
+let%client generate_unique_id () =
+  let id = !next_creep_id in
+  next_creep_id := !next_creep_id + 1;
+  id
+
 (* Create a single creep *)
 let%client create_creep id start_x start_y =
-  let creep_div = div ~a:[a_class ["creep"]] [txt "🐛"] in
+  let creep_div = div ~a:[a_class ["creep"]; a_id (Printf.sprintf "creep-%d" id)] [txt "🐛"] in
   let creep = {
     x = start_x;
     y = start_y;
@@ -190,7 +199,7 @@ let%client creeps_component creep_count_ref update_stats_fn =
   (* Spawn a new creep *)
   let spawn_creep () =
     let (width, height, _) = get_stats () in
-    let id = List.length !creeps in
+    let id = generate_unique_id () in
     let start_x = Random.float (float_of_int width -. 20.0) in
     let start_y = Random.float (float_of_int height -. 20.0) in
     let creep = create_creep id start_x start_y in
