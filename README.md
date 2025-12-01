@@ -91,6 +91,7 @@ export OPAMROOT=/sgoinfre/znichola/.opam
 ### Runing in Docker
 
 ```zsh
-docker run -v .:/home/opam/app -w /home/opam/app  -it --rm ocaml/opam:debian
+docker build -t ocaml_dev_image .
+docker run --rm -it -p 8080:8080 ocaml_dev_image bash
 ```
 

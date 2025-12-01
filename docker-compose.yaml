@@ -1,0 +1,12 @@
+services:
+  ocaml:
+    build: .
+    container_name: ocaml_dev
+    volumes:
+      - .:/home/opam/app
+    user: "opam"
+    working_dir: /home/opam/app
+    ports:
+      - "8080:8080"
+    tty: true
+    stdin_open: true
