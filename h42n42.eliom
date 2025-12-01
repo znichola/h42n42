@@ -76,7 +76,7 @@ let%client get_section (part_height, y_height) =
 let%client hud_component () =
   let mouse_x = ref 0 in
   let mouse_y = ref 0 in
-  let creep_count = ref 0 in
+  let creet_count = ref 0 in
   let stats_container = div ~a:[a_class ["hud-stats"]] [] in
 
   let update_stats () =
@@ -86,7 +86,7 @@ let%client hud_component () =
       [ div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
       ; div [txt (Printf.sprintf "Mouse: (%d, %d)" !mouse_x !mouse_y)]
       ; div [txt (Printf.sprintf "Inside: %s" current_section)]
-      ; div [txt (Printf.sprintf "Creeps: %d" !creep_count)]
+      ; div [txt (Printf.sprintf "Creets: %d" !creet_count)]
       ]
   in
 
@@ -120,7 +120,7 @@ let%client hud_component () =
         [ div [txt "simulation running"]
         ; stats_container
         ]
-    ], creep_count, update_stats
+    ], creet_count, update_stats
 
 
 (* --------------- *)
@@ -134,7 +134,7 @@ let%client get_current_time () =
 
 
 (* --------------- *)
-(* CREEP COMPONENT *)
+(* CREET COMPONENT *)
 (* --------------- *)
 
 [%%client
@@ -145,7 +145,7 @@ type health_status =
   | Mean of { lifetime: float }
 [@@warning "-unused-constructor"]
 
-type creep_state = {
+type creet_state = {
   mutable x: float;
   mutable y: float;
   mutable vx: float;
@@ -159,16 +159,16 @@ type creep_state = {
 ]
 
 (* Global counter for unique IDs *)
-let%client next_creep_id = ref 0
+let%client next_creet_id = ref 0
 
 (* Generate a unique ID *)
 let%client generate_unique_id () =
-  let id = !next_creep_id in
-  next_creep_id := !next_creep_id + 1;
+  let id = !next_creet_id in
+  next_creet_id := !next_creet_id + 1;
   id
 
-(* Create a single creep *)
-let%client create_creep id start_x start_y =
+(* Create a single creet *)
+let%client create_creet id start_x start_y =
   let (health, extra_class) =
     if id = 3 then
       (Berserk { lifetime = 10.0 }, "berserk")
@@ -181,12 +181,12 @@ let%client create_creep id start_x start_y =
   in
 
   (* Add extra class depending on state *)
-  let creep_div =
+  let creet_div =
     div
-      ~a:[ a_class ["creep"; extra_class]; a_id (Printf.sprintf "creep-%d" id) ] [ txt "🐛" ]
+      ~a:[ a_class ["creet"; extra_class]; a_id (Printf.sprintf "creet-%d" id) ] [ txt "🐛" ]
   in
 
-  (* Initialize creep *)
+  (* Initialize creet *)
   {
     x = start_x;
     y = start_y;
@@ -195,12 +195,12 @@ let%client create_creep id start_x start_y =
     id;
     grabbed = false;
     health;
-    element = creep_div;
+    element = creet_div;
   }
 
-(* Update creep position *) 
-let%client update_creep_position creep =
-  let size = match creep.health with
+(* Update creet position *) 
+let%client update_creet_position creet =
+  let size = match creet.health with
     | Mean _ -> 34.0
     | Berserk { lifetime } -> 40.0 *. lifetime
     | _ -> 40.0
@@ -211,63 +211,63 @@ let%client update_creep_position creep =
   let height_f = float_of_int height in
 
   (* Update position *)
-  creep.x <- creep.x +. creep.vx;
-  creep.y <- creep.y +. creep.vy;
+  creet.x <- creet.x +. creet.vx;
+  creet.y <- creet.y +. creet.vy;
 
   (* Bounce off walls *)
-  if creep.x <= 0.0 || creep.x >= width_f -. size then
-    creep.vx <- -.creep.vx;
-  if creep.y <= 0.0 || creep.y >= height_f -. size then
-    creep.vy <- -.creep.vy;
+  if creet.x <= 0.0 || creet.x >= width_f -. size then
+    creet.vx <- -.creet.vx;
+  if creet.y <= 0.0 || creet.y >= height_f -. size then
+    creet.vy <- -.creet.vy;
 
   (* Clamp position *)
-  creep.x <- max 0.0 (min (width_f -. size) creep.x);
-  creep.y <- max 0.0 (min (height_f -. size) creep.y);
+  creet.x <- max 0.0 (min (width_f -. size) creet.x);
+  creet.y <- max 0.0 (min (height_f -. size) creet.y);
 
   (* Update DOM element style *)
-  let creep_element = Eliom_content.Html.To_dom.of_div creep.element in
-  creep_element##.style##.left := Js.string (Printf.sprintf "%.2fpx" creep.x);
-  creep_element##.style##.top := Js.string (Printf.sprintf "%.2fpx" creep.y)
+  let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
+  creet_element##.style##.left := Js.string (Printf.sprintf "%.2fpx" creet.x);
+  creet_element##.style##.top := Js.string (Printf.sprintf "%.2fpx" creet.y)
 
-(* Simulation loop for a single creep using Lwt *)
-let%client rec simulate_creep creep =
+(* Simulation loop for a single creet using Lwt *)
+let%client rec simulate_creet creet =
   let* () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
-  update_creep_position creep;
-  simulate_creep creep
+  update_creet_position creet;
+  simulate_creet creet
 
-(* Creeps container component *)
-let%client creeps_component creep_count_ref update_stats_fn =
-  let container = div ~a:[a_class ["creeps-container"]] [] in
-  let creeps = ref [] in
+(* Creets container component *)
+let%client creets_component creet_count_ref update_stats_fn =
+  let container = div ~a:[a_class ["creets-container"]] [] in
+  let creets = ref [] in
 
-  (* Spawn a new creep *)
-  let spawn_creep () =
+  (* Spawn a new creet *)
+  let spawn_creet () =
     let (width, height, _) = get_stats () in
     let id = generate_unique_id () in
     let start_x = Random.float (float_of_int width -. 40.0) in
     let start_y = Random.float (float_of_int height -. 40.0) in
-    let creep = create_creep id start_x start_y in
+    let creet = create_creet id start_x start_y in
 
-    (* Add creep to container *)
-    Eliom_content.Html.Manip.appendChild container creep.element;
-    creeps := creep :: !creeps;
-    creep_count_ref := List.length !creeps;
+    (* Add creet to container *)
+    Eliom_content.Html.Manip.appendChild container creet.element;
+    creets := creet :: !creets;
+    creet_count_ref := List.length !creets;
     update_stats_fn ();
 
-    (* Start simulation for this creep *)
-    let _ = simulate_creep creep in
+    (* Start simulation for this creet *)
+    let _ = simulate_creet creet in
     ()
   in
 
-  (* Spawn initial creeps *)
+  (* Spawn initial creets *)
   for _i = 0 to 4 do
-    spawn_creep ()
+    spawn_creet ()
   done;
 
-  (* Spawn new creeps periodically *)
+  (* Spawn new creets periodically *)
   let rec spawn_loop () =
     let* () = Lwt_js.sleep 3.0 in (* Spawn every 3 seconds *)
-    spawn_creep ();
+    spawn_creet ();
     spawn_loop ()
   in
   let _ = spawn_loop () in
@@ -296,8 +296,8 @@ let%shared () =
           (body 
             [ Html.C.node [%client world_component ()]
             ; Html.C.node [%client 
-                let (hud, creep_count, update_stats) = hud_component () in
-                let creeps = creeps_component creep_count update_stats in
-                div [hud; creeps]
+                let (hud, creet_count, update_stats) = hud_component () in
+                let creets = creets_component creet_count update_stats in
+                div [hud; creets]
               ]
             ])))
