@@ -80,6 +80,24 @@
   cursor: pointer;
 }
 
+.creet:active {
+  cursor: grabbing;
+}
+
+.creet:hover {
+  text-shadow:
+  0 0 1px red, 
+  -1px -1px 1px red, 
+  -1px 1px 1px red, 
+  1px 1px 1px red, 
+  1px -1px 1px red;
+}
+
+.creet.grabbed {
+  cursor: grabbing;
+  transform: scale(1.15) translateY(-8px);
+}
+
 .sick {
   filter: grayscale(70%) drop-shadow(0 0 0.35rem #6b6b6b);
 }

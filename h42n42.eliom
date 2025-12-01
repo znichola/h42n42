@@ -37,6 +37,38 @@ let%client main_service = ~%main_service
 
 
 (* --------------- *)
+(* GLOBAL STATE    *)
+(* --------------- *)
+
+[%%client
+type global_state = {
+  mutable mouse_x: int;
+  mutable mouse_y: int;
+  mutable creet_count: int;
+}
+
+let global = {
+  mouse_x = 0;
+  mouse_y = 0;
+  creet_count = 0;
+}
+
+(* Initialize global mouse tracking *)
+let () =
+  let _ = Dom_html.addEventListener 
+    window 
+    (Dom_html.Event.mousemove)
+    (Dom_html.handler (fun evt -> 
+      global.mouse_x <- evt##.clientX;
+      global.mouse_y <- evt##.clientY;
+      Js._true))
+    Js._false
+  in
+  ()
+]
+
+
+(* --------------- *)
 (* World COMPONENT *)
 (* --------------- *)
 
@@ -74,19 +106,16 @@ let%client get_section (part_height, y_height) =
 
 (* HUD component *)
 let%client hud_component () =
-  let mouse_x = ref 0 in
-  let mouse_y = ref 0 in
-  let creet_count = ref 0 in
   let stats_container = div ~a:[a_class ["hud-stats"]] [] in
 
   let update_stats () =
     let (width, height, part_height) = get_stats () in
-    let current_section = get_section (part_height, float_of_int !mouse_y) in
+    let current_section = get_section (part_height, float_of_int global.mouse_y) in
     Eliom_content.Html.Manip.replaceChildren stats_container
       [ div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
-      ; div [txt (Printf.sprintf "Mouse: (%d, %d)" !mouse_x !mouse_y)]
+      ; div [txt (Printf.sprintf "Mouse: (%d, %d)" global.mouse_x global.mouse_y)]
       ; div [txt (Printf.sprintf "Inside: %s" current_section)]
-      ; div [txt (Printf.sprintf "Creets: %d" !creet_count)]
+      ; div [txt (Printf.sprintf "Creets: %d" global.creet_count)]
       ]
   in
 
@@ -101,13 +130,11 @@ let%client hud_component () =
     Js._false
   in
 
-  (* Add mousemove event listener *)
+  (* Add mousemove event listener for HUD updates *)
   let _ = Dom_html.addEventListener 
     window 
     (Dom_html.Event.mousemove)
-    (Dom_html.handler (fun evt -> 
-      mouse_x := evt##.clientX;
-      mouse_y := evt##.clientY;
+    (Dom_html.handler (fun _ -> 
       update_stats (); 
       Js._true))
     Js._false
@@ -120,7 +147,7 @@ let%client hud_component () =
         [ div [txt "simulation running"]
         ; stats_container
         ]
-    ], creet_count, update_stats
+    ]
 
 
 (* --------------- *)
@@ -210,16 +237,22 @@ let%client update_creet_position creet =
   let width_f = float_of_int width in
   let height_f = float_of_int height in
 
-  (* Update position *)
-  creet.x <- creet.x +. creet.vx;
-  creet.y <- creet.y +. creet.vy;
+  (* Update position based on grabbed state *)
+  if creet.grabbed then (
+    (* Follow mouse cursor when grabbed *)
+    creet.x <- float_of_int global.mouse_x -. (size /. 2.0);
+    creet.y <- float_of_int global.mouse_y -. (size /. 2.0);
+  ) else (
+    (* Update position with velocity *)
+    creet.x <- creet.x +. creet.vx;
+    creet.y <- creet.y +. creet.vy;
 
-  (* Bounce off walls *)
-  if creet.x <= 0.0 || creet.x >= width_f -. size then
-    creet.vx <- -.creet.vx;
-  if creet.y <= 0.0 || creet.y >= height_f -. size then
-    creet.vy <- -.creet.vy;
-
+    (* Bounce off walls *)
+    if creet.x <= 0.0 || creet.x >= width_f -. size then
+      creet.vx <- -.creet.vx;
+    if creet.y <= 0.0 || creet.y >= height_f -. size then
+      creet.vy <- -.creet.vy;
+  );
   (* Clamp position *)
   creet.x <- max 0.0 (min (width_f -. size) creet.x);
   creet.y <- max 0.0 (min (height_f -. size) creet.y);
@@ -227,7 +260,13 @@ let%client update_creet_position creet =
   (* Update DOM element style *)
   let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
   creet_element##.style##.left := Js.string (Printf.sprintf "%.2fpx" creet.x);
-  creet_element##.style##.top := Js.string (Printf.sprintf "%.2fpx" creet.y)
+  creet_element##.style##.top := Js.string (Printf.sprintf "%.2fpx" creet.y);
+
+  (* Update grabbed class *)
+  if creet.grabbed then
+    creet_element##.classList##add (Js.string "grabbed")
+  else
+    creet_element##.classList##remove (Js.string "grabbed")
 
 (* Simulation loop for a single creet using Lwt *)
 let%client rec simulate_creet creet =
@@ -249,10 +288,23 @@ let%client rec simulate_creet creet =
   
   simulate_creet creet
 
+(* Check if click hit a creet *)
+let%client point_in_creet creet x y =
+  let size = match creet.health with
+    | Mean _ -> 34.0
+    | Berserk { lifetime } -> 40.0 *. lifetime
+    | _ -> 40.0
+  in
+  let fx = float_of_int x in
+  let fy = float_of_int y in
+  fx >= creet.x && fx <= creet.x +. size &&
+  fy >= creet.y && fy <= creet.y +. size
+
 (* Creets container component *)
-let%client creets_component creet_count_ref update_stats_fn =
+let%client creets_component () =
   let container = div ~a:[a_class ["creets-container"]] [] in
   let creets = ref [] in
+  let grabbed_creet = ref None in
 
   (* Spawn a new creet *)
   let spawn_creet () =
@@ -265,12 +317,45 @@ let%client creets_component creet_count_ref update_stats_fn =
     (* Add creet to container *)
     Eliom_content.Html.Manip.appendChild container creet.element;
     creets := creet :: !creets;
-    creet_count_ref := List.length !creets;
-    update_stats_fn ();
+    global.creet_count <- List.length !creets;
 
     (* Start simulation for this creet *)
     let _ = simulate_creet creet in
     ()
+  in
+
+  (* Single mousedown event listener on container *)
+  let container_element = Eliom_content.Html.To_dom.of_div container in
+  let _ = Dom_html.addEventListener 
+    container_element
+    (Dom_html.Event.mousedown)
+    (Dom_html.handler (fun evt ->
+      let x = evt##.clientX in
+      let y = evt##.clientY in
+      (* Check which creet was clicked, if any *)
+      let clicked = List.find_opt (fun c -> point_in_creet c x y) !creets in
+      (match clicked with
+       | Some creet ->
+           Dom.preventDefault evt;
+           creet.grabbed <- true;
+           grabbed_creet := Some creet
+       | None -> ());
+      Js._true))
+    Js._false
+  in
+
+  (* Single global mouseup event listener *)
+  let _ = Dom_html.addEventListener 
+    window 
+    (Dom_html.Event.mouseup)
+    (Dom_html.handler (fun _ ->
+      (match !grabbed_creet with
+       | Some creet -> 
+           creet.grabbed <- false;
+           grabbed_creet := None
+       | None -> ());
+      Js._true))
+    Js._false
   in
 
   (* Spawn initial creets *)
@@ -310,8 +395,8 @@ let%shared () =
           (body 
             [ Html.C.node [%client world_component ()]
             ; Html.C.node [%client 
-                let (hud, creet_count, update_stats) = hud_component () in
-                let creets = creets_component creet_count update_stats in
+                let hud = hud_component () in
+                let creets = creets_component () in
                 div [hud; creets]
               ]
             ])))
