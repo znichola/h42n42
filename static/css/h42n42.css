@@ -67,8 +67,9 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  pointer-events: none;
   z-index: 100;
+  overflow: hidden;
+  user-select: none;
 }
 
 .creep {
@@ -76,6 +77,5 @@
   width: 20px;
   height: 20px;
   font-size: 20px;
-  pointer-events: none;
-  user-select: none;
+  cursor: pointer;
 }

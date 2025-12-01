@@ -27,6 +27,6 @@ RUN chmod +x docker_setup.sh
 
 RUN "./docker_setup.sh"
 
-ENTRYPOINT ["make" "install"]
+# ENTRYPOINT ["make", "install"]
 
 CMD ["bash"]

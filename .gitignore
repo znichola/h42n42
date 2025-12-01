@@ -11,3 +11,6 @@ static/css/project_name.css.map
 
 # Dune
 _build
+
+# Vim
+*.swp

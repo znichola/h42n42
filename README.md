@@ -92,6 +92,6 @@ export OPAMROOT=/sgoinfre/znichola/.opam
 
 ```zsh
 docker build -t ocaml_dev_image .
-docker run --rm -it -p 8080:8080 ocaml_dev_image bash
+docker run --rm -it -p 8080:8080 ocaml_dev_image bash -c "make test.byte"
 ```
 
