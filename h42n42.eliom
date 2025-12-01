@@ -276,13 +276,21 @@ let%client rec simulate_creet creet =
   (* Check if creet is in the river *)
   let (_, _, part_height) = get_stats () in
   let current_section = get_section (part_height, creet.y) in
-  
+  let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
+
   (match creet.health with
    | Healthy when current_section = "River" ->
        creet.health <- Sick { lifetime = 10.0 };
-       (* Update creet element class *)
-       let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
        creet_element##.classList##add (Js.string "sick")
+   | (Sick _ | Berserk _ | Mean _) when creet.grabbed && current_section = "Hospital" ->
+       let class_to_remove = match creet.health with
+         | Sick _ -> "sick"
+         | Berserk _ -> "berserk"
+         | Mean _ -> "mean"
+         | _ -> ""
+       in
+       creet.health <- Healthy;
+       creet_element##.classList##remove (Js.string class_to_remove)
    | _ -> ()
   );
   
