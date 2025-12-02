@@ -55,15 +55,17 @@ let global = {
 
 (* Initialize global mouse tracking *)
 let () =
-  let _ = Dom_html.addEventListener 
-    window 
-    (Dom_html.Event.mousemove)
-    (Dom_html.handler (fun evt -> 
+  let track_mouse () =
+    let open Lwt_js_events in
+    let rec loop () =
+      let* evt = mousemove window in
       global.mouse_x <- evt##.clientX;
       global.mouse_y <- evt##.clientY;
-      Js._true))
-    Js._false
+      loop ()
+    in
+    loop ()
   in
+  let _ = track_mouse () in
   ()
 ]
 
@@ -123,22 +125,26 @@ let%client hud_component () =
   update_stats ();
 
   (* Add resize event listener *)
-  let _ = Dom_html.addEventListener 
-    window 
-    (Dom_html.Event.resize)
-    (Dom_html.handler (fun _ -> update_stats (); Js._true))
-    Js._false
+  let handle_resize () =
+    let open Lwt_js_events in
+    onresizes (fun _ _ ->
+      update_stats ();
+      Lwt.return ()
+    )
   in
+  let _ = handle_resize () in
 
   (* Add mousemove event listener for HUD updates *)
-  let _ = Dom_html.addEventListener 
-    window 
-    (Dom_html.Event.mousemove)
-    (Dom_html.handler (fun _ -> 
-      update_stats (); 
-      Js._true))
-    Js._false
+  let handle_mousemove () =
+    let open Lwt_js_events in
+    let rec loop () =
+      let* _ = mousemove window in
+      update_stats ();
+      loop ()
+    in
+    loop ()
   in
+  let _ = handle_mousemove () in
 
   div
     ~a:[a_class ["hud"]]
@@ -372,12 +378,12 @@ let%client creets_component () =
     ()
   in
 
-  (* Single mousedown event listener on container *)
+  (* Handle mousedown events *)
   let container_element = Eliom_content.Html.To_dom.of_div container in
-  let _ = Dom_html.addEventListener 
-    container_element
-    (Dom_html.Event.mousedown)
-    (Dom_html.handler (fun evt ->
+  let handle_mousedown () =
+    let open Lwt_js_events in
+    let rec loop () =
+      let* evt = mousedown container_element in
       let x = evt##.clientX in
       let y = evt##.clientY in
       (* Check which creet was clicked, if any *)
@@ -388,23 +394,27 @@ let%client creets_component () =
            creet.grabbed <- true;
            grabbed_creet := Some creet
        | None -> ());
-      Js._true))
-    Js._false
+      loop ()
+    in
+    loop ()
   in
+  let _ = handle_mousedown () in
 
-  (* Single global mouseup event listener *)
-  let _ = Dom_html.addEventListener 
-    window 
-    (Dom_html.Event.mouseup)
-    (Dom_html.handler (fun _ ->
+  (* Handle mouseup events *)
+  let handle_mouseup () =
+    let open Lwt_js_events in
+    let rec loop () =
+      let* _ = mouseup window in
       (match !grabbed_creet with
        | Some creet -> 
            creet.grabbed <- false;
            grabbed_creet := None
        | None -> ());
-      Js._true))
-    Js._false
+      loop ()
+    in
+    loop ()
   in
+  let _ = handle_mouseup () in
 
   (* Spawn initial creets *)
   for _i = 0 to 4 do
