@@ -6,6 +6,11 @@ Also, OCaml in the browser!
 
 > A project introducing the OCSIGEN framework, used to create rich applications in OCaml. The goal is to design a simulator of bugs escaping a dangerous virus.
 
+## Ocaml, Eliom and Ocsigen
+
+Ocaml is a language, Eliom is a fullstack (+modile) framework, Oscigen is the project name.
+
+The project is generated using `eliom-distillery -name h42n42 -template app.exe -target-directory .` this is a setup with dune as the build system, see [Dockerfile](./Dockerfile) for prerequisits. The process generates a bunch of files. For the project only the [h42n42.eliom](./h42n42.eliom) and [static/css/h42n42.css](./static/css/h42n42.css) were modified. All code lives in one file, the build system was too annoying to get it working as multiple modules.
 
 ## OCaml commands
 
@@ -56,7 +61,6 @@ Untangling this OCaml shaped mess.
 
 The OCSIGEN framework is some big group of modules, Eliom is also a fullstack framework? Not sure that the diff is, but Eliom docs tutorials align more with what the subject wants.
 
-
 ## Links
 
 - [getting started with Ocaml](https://ocaml.org/docs/tour-of-ocaml)
@@ -88,8 +92,11 @@ Add this line to `.zshrc` to tell opam where it's root is.
 export OPAMROOT=/sgoinfre/znichola/.opam
 ```
 
+But all this is useless because eliom requiers system libs the school does not include.
 
-### Runing in Docker
+### Running in Docker
+
+The dockerfile is setup so it has everything installed and building the docker image also builds the project internally, the entrypoint is therefore `make test.byte` which launches the test server. (TODO see about using `make install` and running an apache instance to serve the static files).
 
 ```zsh
 docker build -t ocaml_dev_image .
