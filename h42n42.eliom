@@ -268,8 +268,45 @@ let%client update_creet_position creet =
   else
     creet_element##.classList##remove (Js.string "grabbed")
 
+(* Check if two creets are colliding *)
+let%client creets_colliding creet1 creet2 =
+  if creet1.id = creet2.id then false
+  else
+    let size1 = match creet1.health with
+      | Mean _ -> 34.0
+      | Berserk { lifetime } -> 40.0 *. lifetime
+      | _ -> 40.0
+    in
+    let size2 = match creet2.health with
+      | Mean _ -> 34.0
+      | Berserk { lifetime } -> 40.0 *. lifetime
+      | _ -> 40.0
+    in
+    let dx = creet1.x -. creet2.x in
+    let dy = creet1.y -. creet2.y in
+    let distance = sqrt (dx *. dx +. dy *. dy) in
+    distance < (size1 +. size2) /. 2.0
+
+(* Check for disease transmission between creets *)
+let%client check_disease_transmission creet all_creets =
+  match creet.health with
+  | Healthy ->
+      (* Check if colliding with any sick creet *)
+      let sick_collision = List.exists (fun other ->
+        match other.health with
+        | Healthy -> false
+        | _ -> creets_colliding creet other
+      ) all_creets in
+      
+      if sick_collision && Random.float 1.0 < 0.02 then (
+        creet.health <- Sick { lifetime = 10.0 };
+        let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
+        creet_element##.classList##add (Js.string "sick")
+      )
+  | _ -> ()
+
 (* Simulation loop for a single creet using Lwt *)
-let%client rec simulate_creet creet =
+let%client rec simulate_creet creet all_creets =
   let* () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
   update_creet_position creet;
   
@@ -294,7 +331,10 @@ let%client rec simulate_creet creet =
    | _ -> ()
   );
   
-  simulate_creet creet
+  (* Check for disease transmission *)
+  check_disease_transmission creet !all_creets;
+  
+  simulate_creet creet all_creets
 
 (* Check if click hit a creet *)
 let%client point_in_creet creet x y =
@@ -328,7 +368,7 @@ let%client creets_component () =
     global.creet_count <- List.length !creets;
 
     (* Start simulation for this creet *)
-    let _ = simulate_creet creet in
+    let _ = simulate_creet creet creets in
     ()
   in
 
