@@ -106,6 +106,11 @@ let%client get_current_time () =
   [@@warning "-unused-value-declaration"]
 
 
+let%client normalize dx dy =
+  let mag = sqrt (dx *. dx +. dy *. dy) in
+  if mag = 0.0 then (0.0, 0.0)
+  else (dx /. mag, dy /. mag)
+
 (* --------------- *)
 (* CREET COMPONENT *)
 (* --------------- *)
@@ -171,13 +176,15 @@ let%client is_point_in_creet creet x y =
 let%client get_dir_to_healthy creet all_creets =
   let candidates =
     List.fold_left (fun acc other ->
-      match other.health with
-      | Healthy ->
-          let dx = other.x -. creet.x in
-          let dy = other.y -. creet.y in
-          let dist2 = dx *. dx +. dy *. dy in
-          (dist2, dx, dy) :: acc
-      | _ -> acc
+      if other.id = creet.id then acc
+      else
+        match other.health with
+        | Healthy ->
+            let dx = other.x -. creet.x in
+            let dy = other.y -. creet.y in
+            let dist2 = dx *. dx +. dy *. dy in
+            (dist2, dx, dy) :: acc
+        | _ -> acc
     ) [] all_creets
   in
 
@@ -185,8 +192,8 @@ let%client get_dir_to_healthy creet all_creets =
   | [] -> None
   | _ ->
       let sorted = List.sort (fun (d1, _, _) (d2, _, _) -> compare d1 d2) candidates in
-      let (_, dx, dy) = List.hd sorted in
-      let mag = sqrt (dx *. dx +. dy *. dy) in
+      let (dist2, dx, dy) = List.hd sorted in
+      let mag = sqrt dist2 in
       if mag = 0.0 then None
       else Some (dx /. mag, dy /. mag)
 
@@ -203,8 +210,7 @@ let%client create_creet id start_x start_y =
   in
 
   let angle = Random.float (2.0 *. Float.pi) in
-  let speed = get_creet_speed Healthy in
-
+  let (vx, vy) = normalize (cos angle) (sin angle) in
   (* Add state class *)
   let creet_div =
     div
@@ -215,8 +221,8 @@ let%client create_creet id start_x start_y =
   {
     x = start_x;
     y = start_y;
-    vx = (cos angle *. speed);
-    vy = (sin angle *. speed);
+    vx;
+    vy;
     id;
     grabbed = false;
     health;
@@ -236,21 +242,21 @@ let%client update_creet_position creet all_creets =
     creet.x <- float_of_int global.mouse_x -. (size /. 2.0);
     creet.y <- float_of_int global.mouse_y -. (size /. 2.0);
   ) else (
-    match creet.health with
-    (* Mean to target healthy *)
+    let (vx, vy) = match creet.health with
+    (* Mean creets target healthy ones *)
     | Mean _ ->
         (match get_dir_to_healthy creet all_creets with
-        | Some (dx, dy) ->
-            creet.vx <- dx +. 10.0;
-            creet.vy <- dy
-        | None -> ());
-    (* Else to randomly change direction *)
+        | Some (dx, dy) -> (dx, dy)
+        | None -> (creet.vx, creet.vy))
+    (* Others randomly change direction *)
     | _ ->
-        if Random.float 1.0 < 0.01 then (
+        if Random.float 1.0 < 0.01 then
           let angle = Random.float (2.0 *. Float.pi) in
-          creet.vx <- cos angle;
-          creet.vy <- sin angle
-        );
+          (normalize (cos angle) (sin angle))
+        else
+          (creet.vx, creet.vy)
+    in
+    creet.vx <- vx; creet.vy <- vy;
     creet.x <- creet.x +. (creet.vx *. speed);
     creet.y <- creet.y +. (creet.vy *. speed);
     (* Bounce off walls *)
