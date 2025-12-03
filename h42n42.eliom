@@ -68,7 +68,6 @@ let () =
 (* World COMPONENT *)
 (* --------------- *)
 
-(* World component *)
 let%client world_component () =
   Html.D.div
     ~a:[Html.D.a_class ["world"]]
@@ -82,7 +81,6 @@ let%client world_component () =
 (* HUB COMPONENT *)
 (* ------------- *)
 
-(* Get stats function *)
 let%client get_stats () =
   let width = window##.innerWidth in
   let height = window##.innerHeight in
@@ -100,7 +98,6 @@ let%client get_section (part_height, y_height) =
   in
   section
 
-(* HUD component *)
 let%client hud_component () =
   let stats_container = div ~a:[a_class ["hud-stats"]] [] in
 
@@ -182,13 +179,11 @@ type creet_state = {
 (* Global counter for unique IDs *)
 let%client next_creet_id = ref 0
 
-(* Generate a unique ID *)
 let%client generate_unique_id () =
   let id = !next_creet_id in
   next_creet_id := !next_creet_id + 1;
   id
 
-(* Create a single creet *)
 let%client create_creet id start_x start_y =
   let (health, extra_class) =
     if id = 3 then
@@ -262,7 +257,6 @@ let%client update_creet_position creet =
   else
     creet_element##.classList##remove (Js.string "grabbed")
 
-(* Check if two creets are colliding *)
 let%client creets_colliding creet1 creet2 =
   if creet1.id = creet2.id then false
   else
@@ -281,7 +275,6 @@ let%client creets_colliding creet1 creet2 =
     let distance = sqrt (dx *. dx +. dy *. dy) in
     distance < (size1 +. size2) /. 2.0
 
-(* Check for disease transmission between creets *)
 let%client check_disease_transmission creet all_creets =
   match creet.health with
   | Healthy ->
@@ -330,7 +323,6 @@ let%client rec simulate_creet creet all_creets =
   
   simulate_creet creet all_creets
 
-(* Check if click hit a creet *)
 let%client point_in_creet creet x y =
   let size = match creet.health with
     | Mean _ -> 34.0
@@ -348,7 +340,6 @@ let%client creets_component () =
   let creets = ref [] in
   let grabbed_creet = ref None in
 
-  (* Spawn a new creet *)
   let spawn_creet () =
     let (width, height, _) = get_stats () in
     let id = generate_unique_id () in
@@ -365,9 +356,8 @@ let%client creets_component () =
     Lwt.async (fun () -> simulate_creet creet creets)
   in
 
-  (* Handle mousedown events *)
-  let container_element = Eliom_content.Html.To_dom.of_div container in
   let rec handle_mousedown () =
+    let container_element = Eliom_content.Html.To_dom.of_div container in
     let* evt = Lwt_js_events.mousedown container_element in
     let x = evt##.clientX in
     let y = evt##.clientY in
@@ -382,7 +372,6 @@ let%client creets_component () =
   in
   Lwt.async handle_mousedown;
 
-  (* Handle mouseup events *)
   let rec handle_mouseup () =
     let* _ = Lwt_js_events.mouseup window in
     (match !grabbed_creet with
