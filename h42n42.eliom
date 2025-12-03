@@ -198,24 +198,9 @@ let%client get_dir_to_healthy creet all_creets =
       else Some (dx /. mag, dy /. mag)
 
 let%client create_creet id start_x start_y =
-  let (health, extra_class) =
-    if id = 3 then
-      (Berserk { lifetime = 22.0 }, "berserk")
-    else if id = 7 then
-      (Mean { lifetime = 22.0 }, "mean")
-    else if id = 1 then
-      (Sick { lifetime = 22.0 }, "sick")
-    else
-      (Healthy, "")
-  in
-
   let angle = Random.float (2.0 *. Float.pi) in
   let (vx, vy) = normalize (cos angle) (sin angle) in
-  (* Add state class *)
-  let creet_div =
-    div
-      ~a:[ a_class ["creet"; extra_class]; a_id (Printf.sprintf "creet-%d" id) ] [ txt "🐛" ]
-  in
+  let creet_div = div ~a:[ a_class ["creet"] ; a_id (Printf.sprintf "creet-%d" id) ] [ txt "🐛" ]in
 
   (* Initialize creet *)
   {
@@ -225,7 +210,7 @@ let%client create_creet id start_x start_y =
     vy;
     id;
     grabbed = false;
-    health;
+    health = Healthy;
     element = creet_div;
   }
 
@@ -428,7 +413,7 @@ let%client creets_component () =
   Lwt.async handle_mouseup;
 
   (* Spawn initial creets *)
-  for _i = 0 to 4 do
+  for _i = 0 to 12 do
     spawn_creet ()
   done;
 
