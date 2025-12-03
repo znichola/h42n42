@@ -43,14 +43,18 @@ type global_state = {
   mutable mouse_x: int;
   mutable mouse_y: int;
   mutable creet_count: int;
+  mutable healthy_count: int;
   mutable tick: int;
+  mutable game_over: bool;
 }
 
 let global = {
   mouse_x = 0;
   mouse_y = 0;
   creet_count = 0;
+  healthy_count = 0;
   tick = 0;
+  game_over = false;
 }
 
 (* Initialize global mouse tracking *)
@@ -214,6 +218,15 @@ let%client create_creet id start_x start_y =
     element = creet_div;
   }
 
+let%client update_healthy_count all_creets =
+  let count = List.fold_left (fun acc creet ->
+    match creet.health with
+    | Healthy -> acc + 1
+    | _ -> acc
+  ) 0 all_creets in
+  global.healthy_count <- count;
+  if count = 0 then global.game_over <- true
+
 let%client update_creet_position creet all_creets =
   let size = get_creet_size creet in
   let speed = get_creet_speed creet.health in
@@ -310,7 +323,8 @@ let%client do_disease_transmission creet all_creets =
 
 (* Simulation loop for a single creet using Lwt *)
 let%client rec simulate_creet creet all_creets =
-  if creet == List.nth !all_creets 0 then global.tick <- global.tick + 1;
+  if global.game_over then Lwt.return () else (
+  if creet == List.nth !all_creets 0 then (global.tick <- global.tick + 1; update_healthy_count !all_creets);
 
   let* () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
 
@@ -361,7 +375,7 @@ let%client rec simulate_creet creet all_creets =
     (* Check for disease transmission *)
     do_disease_transmission creet !all_creets;
     simulate_creet creet all_creets
-  )
+  ))
 
 (* Creets container component *)
 let%client creets_component () =
@@ -420,8 +434,11 @@ let%client creets_component () =
   (* Spawn new creets periodically *)
   let rec spawn_loop () =
     let* () = Lwt_js.sleep 3.0 in
-    spawn_creet ();
-    spawn_loop ()
+    if not global.game_over then (
+      spawn_creet ();
+      spawn_loop ()
+    ) else
+      Lwt.return ()
   in
   Lwt.async spawn_loop;
 
@@ -443,6 +460,7 @@ let%client hud_component () =
       ; div [txt (Printf.sprintf "Mouse: (%d, %d)" global.mouse_x global.mouse_y)]
       ; div [txt (Printf.sprintf "Inside: %s" current_section)]
       ; div [txt (Printf.sprintf "Creets: %d" global.creet_count)]
+      ; div [txt (Printf.sprintf "Healthy: %d" global.healthy_count)]
       ; div [txt (Printf.sprintf "Tick: %d" global.tick)]
       ; div [txt (Printf.sprintf "Speed Healthy: %.2f" (get_creet_speed Healthy))]
       ; div [txt (Printf.sprintf "Speed sick: %.2f" (get_creet_speed (Sick { lifetime = 20.0 })))]
@@ -472,7 +490,7 @@ let%client hud_component () =
     ~a:[a_class ["hud"]]
     [ div
         ~a:[a_class ["hud-content"]]
-        [ div [txt "simulation running"]
+        [ div [txt (if global.game_over then "GAME OVER" else "simulation running")]
         ; stats_container
         ]
     ]
