@@ -43,12 +43,14 @@ type global_state = {
   mutable mouse_x: int;
   mutable mouse_y: int;
   mutable creet_count: int;
+  mutable tick: int;
 }
 
 let global = {
   mouse_x = 0;
   mouse_y = 0;
   creet_count = 0;
+  tick = 0;
 }
 
 (* Initialize global mouse tracking *)
@@ -77,9 +79,9 @@ let%client world_component () =
     ]
 
 
-(* ------------- *)
-(* HUB COMPONENT *)
-(* ------------- *)
+(* --------------- *)
+(* Utils           *)
+(* --------------- *)
 
 let%client get_stats () =
   let width = window##.innerWidth in
@@ -97,53 +99,6 @@ let%client get_section (part_height, y_height) =
     else "Hospital"
   in
   section
-
-let%client hud_component () =
-  let stats_container = div ~a:[a_class ["hud-stats"]] [] in
-
-  let update_stats () =
-    let (width, height, part_height) = get_stats () in
-    let current_section = get_section (part_height, float_of_int global.mouse_y) in
-    Eliom_content.Html.Manip.replaceChildren stats_container
-      [ div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
-      ; div [txt (Printf.sprintf "Mouse: (%d, %d)" global.mouse_x global.mouse_y)]
-      ; div [txt (Printf.sprintf "Inside: %s" current_section)]
-      ; div [txt (Printf.sprintf "Creets: %d" global.creet_count)]
-      ]
-  in
-
-  (* Initial update *)
-  update_stats ();
-
-  (* Add resize event listener *)
-  Lwt.async (fun () ->
-    Lwt_js_events.onresizes (fun _ _ ->
-      update_stats ();
-      Lwt.return ()
-    )
-  );
-
-  (* Add mousemove event listener for HUD updates *)
-  let rec handle_mousemove () =
-    let* _ = Lwt_js_events.mousemove window in
-    update_stats ();
-    handle_mousemove ()
-  in
-  Lwt.async handle_mousemove;
-
-  div
-    ~a:[a_class ["hud"]]
-    [ div
-        ~a:[a_class ["hud-content"]]
-        [ div [txt "simulation running"]
-        ; stats_container
-        ]
-    ]
-
-
-(* --------------- *)
-(* Utils           *)
-(* --------------- *)
 
 let%client get_current_time () =
   let date = new%js Js.date_now in
@@ -184,6 +139,28 @@ let%client generate_unique_id () =
   next_creet_id := !next_creet_id + 1;
   id
 
+let%client get_creet_speed creet_health =
+  let base_speed = match creet_health with
+    | Healthy -> 1.0
+    | _ -> 0.85
+  in
+  (* Progressive speed increase: starts at base_speed, caps at 6x base_speed after 7200 ticks*)
+  let tick_multiplier = 1.0 +. (3.0 *. (1.0 -. exp (-. float_of_int global.tick /. 7200.0))) in
+  base_speed *. tick_multiplier
+
+let%client get_creet_size creet =
+  match creet.health with
+      | Mean _ -> 34.0
+      | Berserk { lifetime } -> 40.0 +. (3.0 *. 40.0) *. (1.0 -. lifetime /. 22.0 )
+      | _ -> 40.0
+
+let%client get_creet_css_class creet_health =
+  match creet_health with
+      | Sick _ -> "sick"
+      | Mean _ -> "mean"
+      | Berserk _ -> "berserk"
+      | _ -> ""
+
 let%client create_creet id start_x start_y =
   let (health, extra_class) =
     if id = 3 then
@@ -196,7 +173,10 @@ let%client create_creet id start_x start_y =
       (Healthy, "")
   in
 
-  (* Add extra class depending on state *)
+  let angle = Random.float (2.0 *. Float.pi) in
+  let speed = get_creet_speed Healthy in
+
+  (* Add state class *)
   let creet_div =
     div
       ~a:[ a_class ["creet"; extra_class]; a_id (Printf.sprintf "creet-%d" id) ] [ txt "🐛" ]
@@ -206,43 +186,42 @@ let%client create_creet id start_x start_y =
   {
     x = start_x;
     y = start_y;
-    vx = Random.float 2.0 -. 1.0;
-    vy = Random.float 2.0 -. 1.0;
+    vx = (cos angle *. speed);
+    vy = (sin angle *. speed);
     id;
     grabbed = false;
     health;
     element = creet_div;
   }
 
-let%client get_creet_size creet =
-  match creet.health with
-      | Mean _ -> 34.0
-      | Berserk { lifetime } -> 40.0 +. (3.0 *. 40.0) *. (1.0 -. lifetime /. 22.0 )
-      | _ -> 40.0
-
 let%client update_creet_position creet =
   let size = get_creet_size creet in
+  let speed = get_creet_speed creet.health in
 
   let (width, height, _) = get_stats () in
   let width_f = float_of_int width in
   let height_f = float_of_int height in
 
-  (* Update position based on grabbed state *)
   if creet.grabbed then (
-    (* Follow mouse cursor when grabbed *)
+    (* Follow mouse when grabbed *)
     creet.x <- float_of_int global.mouse_x -. (size /. 2.0);
     creet.y <- float_of_int global.mouse_y -. (size /. 2.0);
   ) else (
-    (* Update position with velocity *)
-    creet.x <- creet.x +. creet.vx;
-    creet.y <- creet.y +. creet.vy;
-
+    (* Apply progressive speed multiplier *)
+    if Random.float 1.0 < 0.01 then (
+      let angle = Random.float (2.0 *. Float.pi) in
+      creet.vx <- cos angle *. speed;
+      creet.vy <- sin angle *. speed;
+    );
+    creet.x <- creet.x +. (creet.vx *. speed);
+    creet.y <- creet.y +. (creet.vy *. speed);
     (* Bounce off walls *)
     if creet.x <= 0.0 || creet.x >= width_f -. size then
       creet.vx <- -.creet.vx;
     if creet.y <= 0.0 || creet.y >= height_f -. size then
       creet.vy <- -.creet.vy;
   );
+
   (* Clamp position *)
   creet.x <- max 0.0 (min (width_f -. size) creet.x);
   creet.y <- max 0.0 (min (height_f -. size) creet.y);
@@ -253,7 +232,6 @@ let%client update_creet_position creet =
   creet_element##.style##.top := Js.string (Printf.sprintf "%.2fpx" creet.y);
   creet_element##.style##.fontSize := Js.string (Printf.sprintf "%.2fpx" size);
 
-  (* Update grabbed class *)
   if creet.grabbed then
     creet_element##.classList##add (Js.string "grabbed")
   else
@@ -269,7 +247,26 @@ let%client creets_colliding creet1 creet2 =
     let distance = sqrt (dx *. dx +. dy *. dy) in
     distance < (size1 +. size2) /. 2.0
 
-let%client check_disease_transmission creet all_creets =
+let%client make_creet_sick creet =
+  if creet.grabbed then
+    ()
+  else (
+    let type_chance = Random.float 1.0 in
+    let creet_sickness =
+      if type_chance < 0.1 then
+        Mean { lifetime = 22.2 }
+      else if type_chance < 0.2 then
+        Berserk { lifetime = 22.2 }
+      else
+        Sick { lifetime = 22.2 }
+    in
+    creet.health <- creet_sickness;
+
+    let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
+    creet_element##.classList##add (Js.string (get_creet_css_class creet_sickness))
+  )
+
+let%client do_disease_transmission creet all_creets =
   match creet.health with
   | Healthy ->
       (* Check if colliding with any sick creet *)
@@ -279,15 +276,13 @@ let%client check_disease_transmission creet all_creets =
         | _ -> creets_colliding creet other
       ) all_creets in
       
-      if sick_collision && Random.float 1.0 < 0.02 then (
-        creet.health <- Sick { lifetime = 22.2 };
-        let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
-        creet_element##.classList##add (Js.string "sick")
-      )
+      if sick_collision && Random.float 1.0 < 0.02 then ( make_creet_sick creet )
   | _ -> ()
 
 (* Simulation loop for a single creet using Lwt *)
 let%client rec simulate_creet creet all_creets =
+  if creet == List.nth !all_creets 0 then global.tick <- global.tick + 1;
+
   let* () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
 
   (* Decrement lifetime and check for death *)
@@ -326,22 +321,16 @@ let%client rec simulate_creet creet all_creets =
 
     (match creet.health with
     | Healthy when current_section = "River" ->
-        creet.health <- Sick { lifetime = 22.2 };
-        creet_element##.classList##add (Js.string "sick")
+        make_creet_sick creet
     | (Sick _ | Berserk _ | Mean _) when creet.grabbed && current_section = "Hospital" ->
-        let class_to_remove = match creet.health with
-          | Sick _ -> "sick"
-          | Berserk _ -> "berserk"
-          | Mean _ -> "mean"
-          | _ -> ""
-        in
+        let class_to_remove = get_creet_css_class creet.health in
         creet.health <- Healthy;
         creet_element##.classList##remove (Js.string class_to_remove)
     | _ -> ()
     );
 
     (* Check for disease transmission *)
-    check_disease_transmission creet !all_creets;
+    do_disease_transmission creet !all_creets;
     simulate_creet creet all_creets
   )
 
@@ -417,6 +406,56 @@ let%client creets_component () =
   Lwt.async spawn_loop;
 
   container
+
+
+(* ------------- *)
+(* HUB COMPONENT *)
+(* ------------- *)
+
+let%client hud_component () =
+  let stats_container = div ~a:[a_class ["hud-stats"]] [] in
+
+  let update_stats () =
+    let (width, height, part_height) = get_stats () in
+    let current_section = get_section (part_height, float_of_int global.mouse_y) in
+    Eliom_content.Html.Manip.replaceChildren stats_container
+      [ div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
+      ; div [txt (Printf.sprintf "Mouse: (%d, %d)" global.mouse_x global.mouse_y)]
+      ; div [txt (Printf.sprintf "Inside: %s" current_section)]
+      ; div [txt (Printf.sprintf "Creets: %d" global.creet_count)]
+      ; div [txt (Printf.sprintf "Tick: %d" global.tick)]
+      ; div [txt (Printf.sprintf "Speed Healthy: %.2f" (get_creet_speed Healthy))]
+      ; div [txt (Printf.sprintf "Speed sick: %.2f" (get_creet_speed (Sick { lifetime = 20.0 })))]
+      ]
+  in
+
+  (* Initial update *)
+  update_stats ();
+
+  (* Add resize event listener *)
+  Lwt.async (fun () ->
+    Lwt_js_events.onresizes (fun _ _ ->
+      update_stats ();
+      Lwt.return ()
+    )
+  );
+
+  (* Add mousemove event listener for HUD updates *)
+  let rec handle_mousemove () =
+    let* _ = Lwt_js_events.mousemove window in
+    update_stats ();
+    handle_mousemove ()
+  in
+  Lwt.async handle_mousemove;
+
+  div
+    ~a:[a_class ["hud"]]
+    [ div
+        ~a:[a_class ["hud-content"]]
+        [ div [txt "simulation running"]
+        ; stats_container
+        ]
+    ]
 
 
 (* -------------- *)
