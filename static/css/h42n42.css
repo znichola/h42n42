@@ -74,10 +74,9 @@
 
 .creet {
   position: absolute;
-  width: 40px;
-  height: 40px;
   font-size: 40px;
   cursor: pointer;
+  line-height: 1;
 }
 
 .creet:active {
@@ -109,8 +108,6 @@
 
 .mean {
   filter: hue-rotate(280deg) contrast(120%) drop-shadow(0 0 0.35rem #f8768d);
-  width: 34px;
-  height: 34px;
   font-size: 34px;
 }
 

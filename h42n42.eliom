@@ -187,11 +187,11 @@ let%client generate_unique_id () =
 let%client create_creet id start_x start_y =
   let (health, extra_class) =
     if id = 3 then
-      (Berserk { lifetime = 10.0 }, "berserk")
+      (Berserk { lifetime = 22.0 }, "berserk")
     else if id = 7 then
-      (Mean { lifetime = 10.0 }, "mean")
+      (Mean { lifetime = 22.0 }, "mean")
     else if id = 1 then
-      (Sick { lifetime = 10.0 }, "sick")
+      (Sick { lifetime = 22.0 }, "sick")
     else
       (Healthy, "")
   in
@@ -214,13 +214,14 @@ let%client create_creet id start_x start_y =
     element = creet_div;
   }
 
-(* Update creet position *) 
+let%client get_creet_size creet =
+  match creet.health with
+      | Mean _ -> 34.0
+      | Berserk { lifetime } -> 40.0 +. (3.0 *. 40.0) *. (1.0 -. lifetime /. 22.0 )
+      | _ -> 40.0
+
 let%client update_creet_position creet =
-  let size = match creet.health with
-    | Mean _ -> 34.0
-    | Berserk { lifetime } -> 40.0 *. lifetime
-    | _ -> 40.0
-  in
+  let size = get_creet_size creet in
 
   let (width, height, _) = get_stats () in
   let width_f = float_of_int width in
@@ -250,6 +251,7 @@ let%client update_creet_position creet =
   let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
   creet_element##.style##.left := Js.string (Printf.sprintf "%.2fpx" creet.x);
   creet_element##.style##.top := Js.string (Printf.sprintf "%.2fpx" creet.y);
+  creet_element##.style##.fontSize := Js.string (Printf.sprintf "%.2fpx" size);
 
   (* Update grabbed class *)
   if creet.grabbed then
@@ -260,16 +262,8 @@ let%client update_creet_position creet =
 let%client creets_colliding creet1 creet2 =
   if creet1.id = creet2.id then false
   else
-    let size1 = match creet1.health with
-      | Mean _ -> 34.0
-      | Berserk { lifetime } -> 40.0 *. lifetime
-      | _ -> 40.0
-    in
-    let size2 = match creet2.health with
-      | Mean _ -> 34.0
-      | Berserk { lifetime } -> 40.0 *. lifetime
-      | _ -> 40.0
-    in
+    let size1 = get_creet_size creet1 in
+    let size2 = get_creet_size creet2 in
     let dx = creet1.x -. creet2.x in
     let dy = creet1.y -. creet2.y in
     let distance = sqrt (dx *. dx +. dy *. dy) in
@@ -286,7 +280,7 @@ let%client check_disease_transmission creet all_creets =
       ) all_creets in
       
       if sick_collision && Random.float 1.0 < 0.02 then (
-        creet.health <- Sick { lifetime = 10.0 };
+        creet.health <- Sick { lifetime = 22.2 };
         let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
         creet_element##.classList##add (Js.string "sick")
       )
@@ -295,40 +289,66 @@ let%client check_disease_transmission creet all_creets =
 (* Simulation loop for a single creet using Lwt *)
 let%client rec simulate_creet creet all_creets =
   let* () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
-  update_creet_position creet;
-  
-  (* Check if creet is in the river *)
-  let (_, _, part_height) = get_stats () in
-  let current_section = get_section (part_height, creet.y) in
-  let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
 
-  (match creet.health with
-   | Healthy when current_section = "River" ->
-       creet.health <- Sick { lifetime = 10.0 };
-       creet_element##.classList##add (Js.string "sick")
-   | (Sick _ | Berserk _ | Mean _) when creet.grabbed && current_section = "Hospital" ->
-       let class_to_remove = match creet.health with
-         | Sick _ -> "sick"
-         | Berserk _ -> "berserk"
-         | Mean _ -> "mean"
-         | _ -> ""
-       in
-       creet.health <- Healthy;
-       creet_element##.classList##remove (Js.string class_to_remove)
-   | _ -> ()
-  );
-  
-  (* Check for disease transmission *)
-  check_disease_transmission creet !all_creets;
-  
-  simulate_creet creet all_creets
+  (* Decrement lifetime and check for death *)
+  let is_dead = match creet.health with
+    | Healthy -> false
+    | Sick { lifetime } | Berserk { lifetime } | Mean { lifetime } ->
+        let new_lifetime = lifetime -. 0.016 in
+        if new_lifetime <= 0.0 then true
+        else (
+          creet.health <- (match creet.health with
+            | Sick _ -> Sick { lifetime = new_lifetime }
+            | Berserk _ -> Berserk { lifetime = new_lifetime }
+            | Mean _ -> Mean { lifetime = new_lifetime }
+            | Healthy -> Healthy
+          );
+          false
+        )
+  in
+
+  (* If creet died, remove it and stop simulation *)
+  if is_dead then (
+    let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
+    Js.Opt.iter (creet_element##.parentNode) (fun parent ->
+      ignore (parent##removeChild (creet_element :> Dom.node Js.t))
+    );
+    all_creets := List.filter (fun c -> c.id <> creet.id) !all_creets;
+    global.creet_count <- List.length !all_creets;
+    Lwt.return ()
+  ) else (
+    update_creet_position creet;
+    
+    (* Check if creet is in the river *)
+    let (_, _, part_height) = get_stats () in
+    let current_section = get_section (part_height, creet.y) in
+    let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
+
+    (match creet.health with
+    | Healthy when current_section = "River" ->
+        creet.health <- Sick { lifetime = 22.2 };
+        creet_element##.classList##add (Js.string "sick")
+    | (Sick _ | Berserk _ | Mean _) when creet.grabbed && current_section = "Hospital" ->
+        let class_to_remove = match creet.health with
+          | Sick _ -> "sick"
+          | Berserk _ -> "berserk"
+          | Mean _ -> "mean"
+          | _ -> ""
+        in
+        creet.health <- Healthy;
+        creet_element##.classList##remove (Js.string class_to_remove)
+    | _ -> ()
+    );
+
+    (* Check for disease transmission *)
+    check_disease_transmission creet !all_creets;
+    simulate_creet creet all_creets
+  )
+
+
 
 let%client point_in_creet creet x y =
-  let size = match creet.health with
-    | Mean _ -> 34.0
-    | Berserk { lifetime } -> 40.0 *. lifetime
-    | _ -> 40.0
-  in
+  let size = get_creet_size creet in
   let fx = float_of_int x in
   let fy = float_of_int y in
   fx >= creet.x && fx <= creet.x +. size &&
