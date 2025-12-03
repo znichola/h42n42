@@ -96,11 +96,11 @@ But all this is useless because eliom requiers system libs the school does not i
 
 ### Running in Docker
 
-The dockerfile is setup so it has everything installed and building the docker image also builds the project internally, the entrypoint is therefore `make test.byte` which launches the test server. (TODO see about using `make install` and running an apache instance to serve the static files).
+The dockerfile is setup so it has everything installed and building the docker image also builds the project internally, the entrypoint is therefore `make test.byte` which launches the test server. The [entrypoint](./docker_entrypoint.sh) copies the two dev files to the dev folder in the contianer, so rerunning rebuilds also. (TODO see about using `make install` and running an apache instance to serve the static files).
 
 ```zsh
 docker build -t ocaml_dev_image .
-docker run --rm -it -p 8080:8080 ocaml_dev_image bash -c "make test.byte"
+docker run --rm -it -p 8080:8080 -v .:/home/opam/mnt ocaml_dev_image:latest bash -c "make test.byte"
 ```
 
 ## Notes on subject

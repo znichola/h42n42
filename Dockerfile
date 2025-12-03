@@ -24,9 +24,8 @@ EXPOSE 8080
 COPY --chown=opam . .
 
 RUN chmod +x docker_setup.sh
+RUN chmod +x docker_entrypoint.sh
 
 RUN "./docker_setup.sh"
 
-# ENTRYPOINT ["make", "install"]
-
-CMD ["bash"]
+ENTRYPOINT ["./docker_entrypoint.sh"]
