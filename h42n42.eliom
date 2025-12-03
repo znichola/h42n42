@@ -161,6 +161,35 @@ let%client get_creet_css_class creet_health =
       | Berserk _ -> "berserk"
       | _ -> ""
 
+let%client is_point_in_creet creet x y =
+  let size = get_creet_size creet in
+  let fx = float_of_int x in
+  let fy = float_of_int y in
+  fx >= creet.x && fx <= creet.x +. size &&
+  fy >= creet.y && fy <= creet.y +. size
+
+let%client get_dir_to_healthy creet all_creets =
+  let candidates =
+    List.fold_left (fun acc other ->
+      match other.health with
+      | Healthy ->
+          let dx = other.x -. creet.x in
+          let dy = other.y -. creet.y in
+          let dist2 = dx *. dx +. dy *. dy in
+          (dist2, dx, dy) :: acc
+      | _ -> acc
+    ) [] all_creets
+  in
+
+  match candidates with
+  | [] -> None
+  | _ ->
+      let sorted = List.sort (fun (d1, _, _) (d2, _, _) -> compare d1 d2) candidates in
+      let (_, dx, dy) = List.hd sorted in
+      let mag = sqrt (dx *. dx +. dy *. dy) in
+      if mag = 0.0 then None
+      else Some (dx /. mag, dy /. mag)
+
 let%client create_creet id start_x start_y =
   let (health, extra_class) =
     if id = 3 then
@@ -194,7 +223,7 @@ let%client create_creet id start_x start_y =
     element = creet_div;
   }
 
-let%client update_creet_position creet =
+let%client update_creet_position creet all_creets =
   let size = get_creet_size creet in
   let speed = get_creet_speed creet.health in
 
@@ -207,12 +236,21 @@ let%client update_creet_position creet =
     creet.x <- float_of_int global.mouse_x -. (size /. 2.0);
     creet.y <- float_of_int global.mouse_y -. (size /. 2.0);
   ) else (
-    (* Apply progressive speed multiplier *)
-    if Random.float 1.0 < 0.01 then (
-      let angle = Random.float (2.0 *. Float.pi) in
-      creet.vx <- cos angle *. speed;
-      creet.vy <- sin angle *. speed;
-    );
+    match creet.health with
+    (* Mean to target healthy *)
+    | Mean _ ->
+        (match get_dir_to_healthy creet all_creets with
+        | Some (dx, dy) ->
+            creet.vx <- dx +. 10.0;
+            creet.vy <- dy
+        | None -> ());
+    (* Else to randomly change direction *)
+    | _ ->
+        if Random.float 1.0 < 0.01 then (
+          let angle = Random.float (2.0 *. Float.pi) in
+          creet.vx <- cos angle;
+          creet.vy <- sin angle
+        );
     creet.x <- creet.x +. (creet.vx *. speed);
     creet.y <- creet.y +. (creet.vy *. speed);
     (* Bounce off walls *)
@@ -312,7 +350,7 @@ let%client rec simulate_creet creet all_creets =
     global.creet_count <- List.length !all_creets;
     Lwt.return ()
   ) else (
-    update_creet_position creet;
+    update_creet_position creet !all_creets;
     
     (* Check if creet is in the river *)
     let (_, _, part_height) = get_stats () in
@@ -333,15 +371,6 @@ let%client rec simulate_creet creet all_creets =
     do_disease_transmission creet !all_creets;
     simulate_creet creet all_creets
   )
-
-
-
-let%client point_in_creet creet x y =
-  let size = get_creet_size creet in
-  let fx = float_of_int x in
-  let fy = float_of_int y in
-  fx >= creet.x && fx <= creet.x +. size &&
-  fy >= creet.y && fy <= creet.y +. size
 
 (* Creets container component *)
 let%client creets_component () =
@@ -371,7 +400,7 @@ let%client creets_component () =
     let x = evt##.clientX in
     let y = evt##.clientY in
     (* Check which creet was clicked, if any *)
-    (match List.find_opt (fun c -> point_in_creet c x y) !creets with
+    (match List.find_opt (fun c -> is_point_in_creet c x y) !creets with
      | Some creet ->
          Dom.preventDefault evt;
          creet.grabbed <- true;
@@ -409,7 +438,7 @@ let%client creets_component () =
 
 
 (* ------------- *)
-(* HUB COMPONENT *)
+(* HUD COMPONENT *)
 (* ------------- *)
 
 let%client hud_component () =
