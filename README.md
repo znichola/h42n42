@@ -14,6 +14,8 @@ docker build -t h42n42 .
 docker run --rm -it -p 8080:8080 -v .:/home/opam/mnt h42n42:latest bash -c "make test.byte"
 ```
 
+The latest version of the app is deployed with onrender on [h42n42.onrender.com](https://h42n42.onrender.com/)
+
 ## Ocaml, Eliom and Ocsigen
 
 Ocaml is a language, Eliom is a fullstack (+modile) framework, Oscigen is the project name.
