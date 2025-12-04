@@ -674,7 +674,14 @@ let%client hud_component on_start =
     
     (* Initial update *)
     update_stats ();
-    
+
+    let rec handle_stats_update () =
+      let* () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
+      update_stats ();
+      handle_stats_update ()
+    in
+    Lwt.async handle_stats_update;
+
     (* Add resize event listener *)
     Lwt.async (fun () ->
       Lwt_js_events.onresizes (fun _ _ ->
@@ -682,8 +689,7 @@ let%client hud_component on_start =
         Lwt.return ()
       )
     );
-    
-    (* Add mousemove event listener for HUD updates *)
+
     let rec handle_mousemove () =
       let* _ = Lwt_js_events.mousemove window in
       update_stats ();
