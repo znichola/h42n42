@@ -39,6 +39,12 @@ open Lwt.Syntax
 (* --------------- *)
 
 [%%client
+type game_state = 
+  | ConfigScreen
+  | Running
+  | GameOver
+[@@warning "-unused-constructor"]
+
 type global_state = {
   mutable mouse_x: int;
   mutable mouse_y: int;
@@ -46,6 +52,7 @@ type global_state = {
   mutable healthy_count: int;
   mutable tick: int;
   mutable game_over: bool;
+  mutable game_state: game_state;
 }
 
 let global = {
@@ -55,7 +62,34 @@ let global = {
   healthy_count = 0;
   tick = 0;
   game_over = false;
+  game_state = ConfigScreen;
 }
+
+type config = {
+  mutable initial_creets: float;
+  mutable spawn_interval: float;
+  mutable infection_rate: float;
+  mutable disease_duration: float;
+  mutable base_speed: float;
+}
+
+let game_config = {
+  initial_creets = 13.0;
+  spawn_interval = 3.0;
+  infection_rate = 0.02;
+  disease_duration = 22.2;
+  base_speed = 1.0;
+}
+
+type config_option =
+  FloatOption of {
+      label: string;
+      get: unit -> float;
+      set: float -> unit;
+      mmin: float;
+      mmax: float;
+      step: float;
+    }
 
 (* Initialize global mouse tracking *)
 let () =
@@ -68,7 +102,10 @@ let () =
   in
   Lwt.async track_mouse
 ]
-
+type game_state = 
+  | ConfigScreen
+  | Running
+  | GameOver
 
 (* --------------- *)
 (* World COMPONENT *)
@@ -86,6 +123,10 @@ let%client world_component () =
 (* --------------- *)
 (* Utils           *)
 (* --------------- *)
+
+let%client is_gameover () =
+  global.game_state == ConfigScreen
+  [@@warning "-unused-value-declaration"]
 
 let%client get_stats () =
   let width = window##.innerWidth in
@@ -150,8 +191,8 @@ let%client generate_unique_id () =
 
 let%client get_creet_speed creet_health =
   let base_speed = match creet_health with
-    | Healthy -> 1.0
-    | _ -> 0.85
+    | Healthy -> game_config.base_speed
+    | _ -> game_config.base_speed *. 0.85
   in
   (* Progressive speed increase: starts at base_speed, caps at 6x base_speed after 7200 ticks*)
   let tick_multiplier = 1.0 +. (3.0 *. (1.0 -. exp (-. float_of_int global.tick /. 7200.0))) in
@@ -377,11 +418,11 @@ let%client rec simulate_creet creet all_creets =
     simulate_creet creet all_creets
   ))
 
-(* Creets container component *)
 let%client creets_component () =
   let container = div ~a:[a_class ["creets-container"]] [] in
   let creets = ref [] in
   let grabbed_creet = ref None in
+  let started = ref false in
 
   let spawn_creet () =
     let (width, height, _) = get_stats () in
@@ -399,93 +440,203 @@ let%client creets_component () =
     Lwt.async (fun () -> simulate_creet creet creets)
   in
 
-  let rec handle_mousedown () =
-    let container_element = Eliom_content.Html.To_dom.of_div container in
-    let* evt = Lwt_js_events.mousedown container_element in
-    let x = evt##.clientX in
-    let y = evt##.clientY in
-    (* Check which creet was clicked, if any *)
-    (match List.find_opt (fun c -> is_point_in_creet c x y) !creets with
-     | Some creet ->
-         Dom.preventDefault evt;
-         creet.grabbed <- true;
-         grabbed_creet := Some creet
-     | None -> ());
-    handle_mousedown ()
+  let start_simulation () =
+    if not !started then (
+      started := true;
+
+      let rec handle_mousedown () =
+        let container_element = Eliom_content.Html.To_dom.of_div container in
+        let* evt = Lwt_js_events.mousedown container_element in
+        let x = evt##.clientX in
+        let y = evt##.clientY in
+        (match List.find_opt (fun c -> is_point_in_creet c x y) !creets with
+         | Some creet ->
+             Dom.preventDefault evt;
+             creet.grabbed <- true;
+             grabbed_creet := Some creet
+         | None -> ());
+        handle_mousedown ()
+      in
+      Lwt.async handle_mousedown;
+
+      let rec handle_mouseup () =
+        let* _ = Lwt_js_events.mouseup window in
+        (match !grabbed_creet with
+         | Some creet -> 
+             creet.grabbed <- false;
+             grabbed_creet := None
+         | None -> ());
+        handle_mouseup ()
+      in
+      Lwt.async handle_mouseup;
+
+      for _i = 0 to (int_of_float game_config.initial_creets) - 1 do
+        spawn_creet ()
+      done;
+
+      let rec spawn_loop () =
+        let* () = Lwt_js.sleep game_config.spawn_interval in
+        if not global.game_over then (
+          spawn_creet ();
+          spawn_loop ()
+        ) else
+          Lwt.return ()
+      in
+      Lwt.async spawn_loop
+    )
   in
-  Lwt.async handle_mousedown;
 
-  let rec handle_mouseup () =
-    let* _ = Lwt_js_events.mouseup window in
-    (match !grabbed_creet with
-     | Some creet -> 
-         creet.grabbed <- false;
-         grabbed_creet := None
-     | None -> ());
-    handle_mouseup ()
-  in
-  Lwt.async handle_mouseup;
-
-  (* Spawn initial creets *)
-  for _i = 0 to 12 do
-    spawn_creet ()
-  done;
-
-  (* Spawn new creets periodically *)
-  let rec spawn_loop () =
-    let* () = Lwt_js.sleep 3.0 in
-    if not global.game_over then (
-      spawn_creet ();
-      spawn_loop ()
-    ) else
-      Lwt.return ()
-  in
-  Lwt.async spawn_loop;
-
-  container
+  (* Return both container and start function *)
+  (container, start_simulation)
 
 
 (* ------------- *)
 (* HUD COMPONENT *)
 (* ------------- *)
 
-let%client hud_component () =
-  let stats_container = div ~a:[a_class ["hud-content"]] [] in
+let%client config_options = [
+  FloatOption {
+    label = "Initial Creets";
+    get = (fun () -> game_config.initial_creets);
+    set = (fun v -> game_config.initial_creets <- v);
+    mmin = 1.0;
+    mmax = 100.0;
+    step = 1.0;
+  };
+  FloatOption {
+    label = "Spawn Interval";
+    get = (fun () -> game_config.spawn_interval);
+    set = (fun v -> game_config.spawn_interval <- v);
+    mmin = 1.0;
+    mmax = 10.0;
+    step = 0.5;
+  };
+  FloatOption {
+    label = "Infection Rate";
+    get = (fun () -> game_config.infection_rate);
+    set = (fun v -> game_config.infection_rate <- v);
+    mmin = 0.001;
+    mmax = 1.0;
+    step = 0.001;
+  };
+  FloatOption {
+    label = "Sickness duration";
+    get = (fun () -> game_config.disease_duration);
+    set = (fun v -> game_config.disease_duration <- v);
+    mmin = 5.0;
+    mmax = 60.0;
+    step = 1.0;
+  };
+  FloatOption {
+    label = "Base Speed";
+    get = (fun () -> game_config.base_speed);
+    set = (fun v -> game_config.base_speed <- v);
+    mmin = 0.5;
+    mmax = 5.0;
+    step = 0.1;
+  };
+]
 
-  let update_stats () =
-    let (width, height, part_height) = get_stats () in
-    let current_section = get_section (part_height, float_of_int global.mouse_y) in
-    Eliom_content.Html.Manip.replaceChildren stats_container
-      [ div [txt (if global.game_over then "GAME OVER" else "simulation running")] 
-      ; div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
-      ; div [txt (Printf.sprintf "Mouse: (%d, %d)" global.mouse_x global.mouse_y)]
-      ; div [txt (Printf.sprintf "Inside: %s" current_section)]
-      ; div [txt (Printf.sprintf "Healthy/Creets: %d/%d" global.healthy_count global.creet_count)]
-      ; div [txt (Printf.sprintf "Tick: %d" global.tick)]
-      ; div [txt (Printf.sprintf "Base speed: %.2f" (get_creet_speed Healthy))]
-      ]
-  in
+let%client create_config_input option_def =
+  match option_def with
+  | FloatOption { label; get; set; mmin; mmax; step } ->
+      let input = Html.D.input 
+        ~a:[ a_input_type `Number
+           ; a_value (Printf.sprintf "%.3f" (get ()))
+           ; a_input_min (`Number (int_of_float mmin))
+           ; a_input_max (`Number (int_of_float mmax))
+           ; a_step (Some step)
+           ] () in
 
-  (* Initial update *)
-  update_stats ();
+      let input_element = Eliom_content.Html.To_dom.of_input input in
+      input_element##.oninput := Dom.handler (fun _ ->
+        let value = Js.to_string input_element##.value in
+        (try 
+          let v = float_of_string value in
+          let clamped = max mmin (min mmax v) in
+          set clamped
+        with _ -> ());
+        Js._true
+      );
 
-  (* Add resize event listener *)
-  Lwt.async (fun () ->
-    Lwt_js_events.onresizes (fun _ _ ->
-      update_stats ();
-      Lwt.return ()
-    )
+      div ~a:[a_class ["config-row"]] 
+        [ Html.D.label [txt (label ^ ": ")]
+        ; input
+        ]
+
+let%client config_component on_start =
+  let config_container = div ~a:[a_class ["hud-content"]] [] in
+  
+  let start_button = Html.D.button ~a:[ a_button_type `Button] [txt "Start Simulation"] in
+  
+  (* Handle start button click *)
+  let button_element = Eliom_content.Html.To_dom.of_button start_button in
+  button_element##.onclick := Dom.handler (fun _ ->
+    global.game_state <- Running;
+    on_start ();
+    Js._true
   );
+  
+  let option_inputs = List.map create_config_input config_options in
+  
+  Eliom_content.Html.Manip.replaceChildren config_container
+    ([ div ~a:[a_class [""]] [txt "H42N42 Configuration"] ]
+     @ option_inputs
+     @ [ div ~a:[a_class ["config-row"]] [start_button] ]);
+  
+  config_container
 
-  (* Add mousemove event listener for HUD updates *)
-  let rec handle_mousemove () =
-    let* _ = Lwt_js_events.mousemove window in
+let%client hud_component on_start =
+  let hud_content = div ~a:[a_class ["hud"]] [] in
+  let stats_container = ref (div []) in
+
+  let show_stats () =
+    let stats = div ~a:[a_class ["hud-content"]] [] in
+    stats_container := stats;
+    Eliom_content.Html.Manip.replaceChildren hud_content [ stats ];
+    
+    let update_stats () =
+      let (width, height, part_height) = get_stats () in
+      let current_section = get_section (part_height, float_of_int global.mouse_y) in
+      Eliom_content.Html.Manip.replaceChildren !stats_container
+        [ div [txt (if global.game_over then "GAME OVER" else "simulation running")] 
+        ; div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
+        ; div [txt (Printf.sprintf "Mouse: (%d, %d)" global.mouse_x global.mouse_y)]
+        ; div [txt (Printf.sprintf "Inside: %s" current_section)]
+        ; div [txt (Printf.sprintf "Healthy/Creets: %d/%d" global.healthy_count global.creet_count)]
+        ; div [txt (Printf.sprintf "Tick: %d" global.tick)]
+        ; div [txt (Printf.sprintf "Base speed: %.2f" (get_creet_speed Healthy))]
+        ]
+    in
+    
+    (* Initial update *)
     update_stats ();
-    handle_mousemove ()
+    
+    (* Add resize event listener *)
+    Lwt.async (fun () ->
+      Lwt_js_events.onresizes (fun _ _ ->
+        update_stats ();
+        Lwt.return ()
+      )
+    );
+    
+    (* Add mousemove event listener for HUD updates *)
+    let rec handle_mousemove () =
+      let* _ = Lwt_js_events.mousemove window in
+      update_stats ();
+      handle_mousemove ()
+    in
+    Lwt.async handle_mousemove
   in
-  Lwt.async handle_mousemove;
 
-  div ~a:[a_class ["hud"]] [ stats_container ]
+  let show_config () =
+    Eliom_content.Html.Manip.replaceChildren hud_content
+      [ config_component (fun () -> show_stats (); on_start ()) ]
+  in
+
+  show_config ();
+
+ hud_content
 
 
 (* -------------- *)
@@ -507,7 +658,11 @@ let%shared () =
                       ["css"; "h42n42.css"])
                  () ])
           (body 
-            [ Html.C.node [%client world_component ()]
-            ; Html.C.node [%client hud_component () ]
-            ; Html.C.node [%client creets_component () ]
+            [ Html.C.node [%client 
+              let (creets_cont, start_fn) = creets_component () in
+              div [ world_component ()
+                  ; hud_component start_fn
+                  ; creets_cont
+                  ]
+              ]
             ])))

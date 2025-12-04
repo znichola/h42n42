@@ -27,6 +27,27 @@
     background-color: #ffd6e0;
 }
 
+.config-title {
+  font-size: 1.5em;
+  margin-bottom: 1em;
+  text-align: center;
+}
+
+.config-row {
+  margin: 0.5em 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  pointer-events: auto;
+  user-select: auto;
+}
+
+.start-button {
+  margin-top: 1em;
+  padding: 0.5em 1em;
+  cursor: pointer;
+}
+
 .hud {
   position: absolute;
   top: 0;
