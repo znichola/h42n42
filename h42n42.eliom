@@ -71,16 +71,18 @@ type config = {
   mutable infection_rate: float;
   mutable disease_duration: float;
   mutable base_speed: float;
+  mutable mean_speed_multiplier: float;
   mutable base_size: float;
   mutable creet_emoji: string;
   }
 
 let game_config = {
-  initial_creets = 13.0;
+  initial_creets = 23.0;
   spawn_interval = 3.0;
   infection_rate = 0.02;
-  disease_duration = 22.2;
+  disease_duration = 33.3;
   base_speed = 1.0;
+  mean_speed_multiplier = 0.85;
   base_size = 40.0;
   creet_emoji = "🐛";
 }
@@ -141,7 +143,7 @@ let%client is_gameover () =
 let%client get_stats () =
   let width = window##.innerWidth in
   let height = window##.innerHeight in
-  let total_parts = 6 in (* 1 + 4 + 1 *)
+  let total_parts = 6 in (* 1 + 4 + 1 see flex size in css*)
   let part_height = float_of_int height /. float_of_int total_parts in
   (width, height, part_height)
 
@@ -154,12 +156,6 @@ let%client get_section (part_height, y_height) =
     else "Hospital"
   in
   section
-
-let%client get_current_time () =
-  let date = new%js Js.date_now in
-  (Js.to_float date##getTime) /. 1000.0
-  [@@warning "-unused-value-declaration"]
-
 
 let%client normalize dx dy =
   let mag = sqrt (dx *. dx +. dy *. dy) in
@@ -202,10 +198,11 @@ let%client generate_unique_id () =
 let%client get_creet_speed creet_health =
   let base_speed = match creet_health with
     | Healthy -> game_config.base_speed
+    | Mean _ -> game_config.base_speed *. game_config.mean_speed_multiplier
     | _ -> game_config.base_speed *. 0.85
   in
-  (* Progressive speed increase: starts at base_speed, caps at 6x base_speed after 7200 ticks*)
-  let tick_multiplier = 1.0 +. (3.0 *. (1.0 -. exp (-. float_of_int global.tick /. 7200.0))) in
+  (* Progressive speed increase *)
+  let tick_multiplier = 1.0 +. (5.0 *. (1.0 -. exp (-. float_of_int global.tick /. 3600.0))) in
   base_speed *. tick_multiplier
 
 let%client get_creet_size creet =
@@ -220,6 +217,16 @@ let%client get_creet_css_class creet_health =
       | Mean _ -> "mean"
       | Berserk _ -> "berserk"
       | _ -> ""
+
+let%client get_creet_section (part_height, creet) = 
+  let river_end = part_height in
+  let grass_end = part_height +. (4.0 *. part_height) in
+  let section = 
+    if creet.y < river_end then "River"
+    else if (creet.y +. (get_creet_size creet)) < grass_end then "Grass"
+    else "Hospital"
+  in
+  section
 
 let%client is_point_in_creet creet x y =
   let size = get_creet_size creet in
@@ -410,7 +417,7 @@ let%client rec simulate_creet creet all_creets =
     
     (* Check if creet is in the river *)
     let (_, _, part_height) = get_stats () in
-    let current_section = get_section (part_height, creet.y) in
+    let current_section = get_creet_section (part_height, creet) in
     let creet_element = Eliom_content.Html.To_dom.of_div creet.element in
 
     (match creet.health with
@@ -546,6 +553,14 @@ let%client config_options = [
     step = 0.1;
   };
   FloatOption {
+    label = "Mean Speed Multiplier";
+    get = (fun () -> game_config.mean_speed_multiplier);
+    set = (fun v -> game_config.mean_speed_multiplier <- v);
+    mmin = 0.5;
+    mmax = 5.0;
+    step = 0.1;
+  };
+  FloatOption {
     label = "Base Size";
     get = (fun () -> game_config.base_size);
     set = (fun v -> game_config.base_size <- v);
@@ -557,18 +572,7 @@ let%client config_options = [
     label = "Creet style";
     get = (fun () -> game_config.creet_emoji);
     set = (fun v -> game_config.creet_emoji <- v);
-    options = [
-      "🐛";
-      "🐜";
-      "🦗";
-      "🐞";
-      "🦖";
-      "🪲";
-      "🐸";
-      "🦂";
-      "🐌";
-      "🐘";
-    ];
+    options = [ "🐛"; "🐜"; "🦗"; "🐞"; "🦖"; "🪲"; "🐸"; "🦂"; "🐌"; "🐘"; "💩"; "👾"; "🎃"; "🚙"; "🚜";];
   };
 ]
 
@@ -663,8 +667,8 @@ let%client hud_component on_start =
         ; div [txt (Printf.sprintf "Mouse: (%d, %d)" global.mouse_x global.mouse_y)]
         ; div [txt (Printf.sprintf "Inside: %s" current_section)]
         ; div [txt (Printf.sprintf "Healthy/Creets: %d/%d" global.healthy_count global.creet_count)]
-        ; div [txt (Printf.sprintf "Tick: %d" global.tick)]
-        ; div [txt (Printf.sprintf "Base speed: %.2f" (get_creet_speed Healthy))]
+        ; div [txt (Printf.sprintf "Elapsed time: %.1f" ((float_of_int global.tick) *. 0.016))]
+        ; div [txt (Printf.sprintf "Creet speed: %.2f" (get_creet_speed Healthy))]
         ]
     in
     
