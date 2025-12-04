@@ -33,11 +33,13 @@
   right: 0;
   padding: 20px;
   z-index: 1000;
+  pointer-events: none;
+  user-select: none;
 }
 
 .hud-content {
-  background-color: #0000008a;
-  color: #ffffff;
+  background-color: #0000007a;
+  color: #ffffffbf;
   padding: 15px 25px;
   border-radius: 8px;
   font-family: 'Courier New', monospace;

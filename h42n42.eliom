@@ -460,11 +460,9 @@ let%client hud_component () =
       ; div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
       ; div [txt (Printf.sprintf "Mouse: (%d, %d)" global.mouse_x global.mouse_y)]
       ; div [txt (Printf.sprintf "Inside: %s" current_section)]
-      ; div [txt (Printf.sprintf "Creets: %d" global.creet_count)]
-      ; div [txt (Printf.sprintf "Healthy: %d" global.healthy_count)]
+      ; div [txt (Printf.sprintf "Healthy/Creets: %d/%d" global.healthy_count global.creet_count)]
       ; div [txt (Printf.sprintf "Tick: %d" global.tick)]
-      ; div [txt (Printf.sprintf "Speed Healthy: %.2f" (get_creet_speed Healthy))]
-      ; div [txt (Printf.sprintf "Speed sick: %.2f" (get_creet_speed (Sick { lifetime = 20.0 })))]
+      ; div [txt (Printf.sprintf "Base speed: %.2f" (get_creet_speed Healthy))]
       ]
   in
 
