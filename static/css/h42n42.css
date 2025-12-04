@@ -36,7 +36,7 @@
 }
 
 .hud-content {
-  background-color: #000000b3;
+  background-color: #0000008a;
   color: #ffffff;
   padding: 15px 25px;
   border-radius: 8px;
@@ -49,16 +49,15 @@
   text-align: center;
 }
 
-.hud-stats {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #ffffff4d;
-  font-size: 0.8em;
-  line-height: 1.6;
+.hud-content > div:first-child {
+  border-bottom: 1px solid #ffffff4d;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
 }
 
-.hud-stats div {
-  margin: 3px 0;
+.hud-content > div:not(:first-child) {
+  font-size: 0.8em;
+  line-height: 1.6;
 }
 
 .creets-container {
@@ -77,8 +76,14 @@
   font-size: 40px;
   cursor: pointer;
   line-height: 1;
+  opacity: 0;
+  animation: creetFadeIn 0.2s ease-out forwards;
 }
 
+@keyframes creetFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 .creet:active {
   cursor: grabbing;
 }
@@ -102,6 +107,7 @@
 }
 
 .berserk {
+  opacity: unset;
   animation: berserk-pulse 0.85s infinite ease-in-out;
   filter: invert(80%) drop-shadow(0 0 0.35rem purple);
 }

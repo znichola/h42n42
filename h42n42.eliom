@@ -450,13 +450,14 @@ let%client creets_component () =
 (* ------------- *)
 
 let%client hud_component () =
-  let stats_container = div ~a:[a_class ["hud-stats"]] [] in
+  let stats_container = div ~a:[a_class ["hud-content"]] [] in
 
   let update_stats () =
     let (width, height, part_height) = get_stats () in
     let current_section = get_section (part_height, float_of_int global.mouse_y) in
     Eliom_content.Html.Manip.replaceChildren stats_container
-      [ div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
+      [ div [txt (if global.game_over then "GAME OVER" else "simulation running")] 
+      ; div [txt (Printf.sprintf "Resolution: %dx%d" width height)]
       ; div [txt (Printf.sprintf "Mouse: (%d, %d)" global.mouse_x global.mouse_y)]
       ; div [txt (Printf.sprintf "Inside: %s" current_section)]
       ; div [txt (Printf.sprintf "Creets: %d" global.creet_count)]
@@ -486,14 +487,7 @@ let%client hud_component () =
   in
   Lwt.async handle_mousemove;
 
-  div
-    ~a:[a_class ["hud"]]
-    [ div
-        ~a:[a_class ["hud-content"]]
-        [ div [txt (if global.game_over then "GAME OVER" else "simulation running")]
-        ; stats_container
-        ]
-    ]
+  div ~a:[a_class ["hud"]] [ stats_container ]
 
 
 (* -------------- *)
@@ -516,9 +510,6 @@ let%shared () =
                  () ])
           (body 
             [ Html.C.node [%client world_component ()]
-            ; Html.C.node [%client 
-                let hud = hud_component () in
-                let creets = creets_component () in
-                div [hud; creets]
-              ]
+            ; Html.C.node [%client hud_component () ]
+            ; Html.C.node [%client creets_component () ]
             ])))
