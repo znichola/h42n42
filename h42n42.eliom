@@ -71,7 +71,9 @@ type config = {
   mutable infection_rate: float;
   mutable disease_duration: float;
   mutable base_speed: float;
-}
+  mutable base_size: float;
+  mutable creet_emoji: string;
+  }
 
 let game_config = {
   initial_creets = 13.0;
@@ -79,6 +81,8 @@ let game_config = {
   infection_rate = 0.02;
   disease_duration = 22.2;
   base_speed = 1.0;
+  base_size = 40.0;
+  creet_emoji = "🐛";
 }
 
 type config_option =
@@ -87,8 +91,14 @@ type config_option =
       get: unit -> float;
       set: float -> unit;
       mmin: float;
-      mmax: float;
+      mmax: float;  
       step: float;
+    }
+    | SelectOption of {
+      label: string;
+      get: unit -> string;
+      set: string -> unit;
+      options: string list;
     }
 
 (* Initialize global mouse tracking *)
@@ -200,9 +210,9 @@ let%client get_creet_speed creet_health =
 
 let%client get_creet_size creet =
   match creet.health with
-      | Mean _ -> 34.0
-      | Berserk { lifetime } -> 40.0 +. (3.0 *. 40.0) *. (1.0 -. lifetime /. 22.0 )
-      | _ -> 40.0
+      | Mean _ -> game_config.base_size *. 0.9
+      | Berserk { lifetime } -> game_config.base_size +. (3.0 *. game_config.base_size) *. (1.0 -. lifetime /. game_config.disease_duration )
+      | _ -> game_config.base_size
 
 let%client get_creet_css_class creet_health =
   match creet_health with
@@ -245,7 +255,7 @@ let%client get_dir_to_healthy creet all_creets =
 let%client create_creet id start_x start_y =
   let angle = Random.float (2.0 *. Float.pi) in
   let (vx, vy) = normalize (cos angle) (sin angle) in
-  let creet_div = div ~a:[ a_class ["creet"] ; a_id (Printf.sprintf "creet-%d" id) ] [ txt "🐛" ]in
+  let creet_div = div ~a:[ a_class ["creet"] ; a_id (Printf.sprintf "creet-%d" id) ] [ txt game_config.creet_emoji ]in
 
   (* Initialize creet *)
   {
@@ -337,11 +347,11 @@ let%client make_creet_sick creet =
     let type_chance = Random.float 1.0 in
     let creet_sickness =
       if type_chance < 0.1 then
-        Mean { lifetime = 22.2 }
+        Mean { lifetime = game_config.disease_duration }
       else if type_chance < 0.2 then
-        Berserk { lifetime = 22.2 }
+        Berserk { lifetime = game_config.disease_duration }
       else
-        Sick { lifetime = 22.2 }
+        Sick { lifetime = game_config.disease_duration }
     in
     creet.health <- creet_sickness;
 
@@ -427,8 +437,8 @@ let%client creets_component () =
   let spawn_creet () =
     let (width, height, _) = get_stats () in
     let id = generate_unique_id () in
-    let start_x = Random.float (float_of_int width -. 40.0) in
-    let start_y = Random.float (float_of_int height -. 40.0) in
+    let start_x = Random.float (float_of_int width -. game_config.base_size) in
+    let start_y = Random.float (float_of_int height -. game_config.base_size) in
     let creet = create_creet id start_x start_y in
 
     (* Add creet to container *)
@@ -535,6 +545,31 @@ let%client config_options = [
     mmax = 5.0;
     step = 0.1;
   };
+  FloatOption {
+    label = "Base Size";
+    get = (fun () -> game_config.base_size);
+    set = (fun v -> game_config.base_size <- v);
+    mmin = 30.0;
+    mmax = 100.0;
+    step = 5.0;
+  };
+  SelectOption {
+    label = "Creet style";
+    get = (fun () -> game_config.creet_emoji);
+    set = (fun v -> game_config.creet_emoji <- v);
+    options = [
+      "🐛";
+      "🐜";
+      "🦗";
+      "🐞";
+      "🦖";
+      "🪲";
+      "🐸";
+      "🦂";
+      "🐌";
+      "🐘";
+    ];
+  };
 ]
 
 let%client create_config_input option_def =
@@ -563,6 +598,30 @@ let%client create_config_input option_def =
         [ Html.D.label [txt (label ^ ": ")]
         ; input
         ]
+
+  | SelectOption { label; get; set; options } ->
+    let current_value = get () in
+    let option_elements = List.map (fun (value) ->
+      Html.D.option 
+        ~a:(if value = current_value then [a_selected ()] else [])
+        (txt value)
+    ) options in
+    
+    let select = Html.D.select option_elements in
+    
+    let select_element = Eliom_content.Html.To_dom.of_select select in
+    select_element##.onchange := Dom.handler (fun _ ->
+      let idx = select_element##.selectedIndex in
+      if idx >= 0 && idx < List.length options then
+        let value = List.nth options idx in
+        set value;
+        Js._true else Js._false
+    );
+    
+    div ~a:[a_class ["config-row"]] 
+      [ Html.D.label [txt (label ^ ": ")]
+      ; select
+      ]
 
 let%client config_component on_start =
   let config_container = div ~a:[a_class ["hud-content"]] [] in
