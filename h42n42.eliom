@@ -12,18 +12,11 @@ module%shared App = Eliom_registration.App (struct
     let global_data_path = Some ["__global_data__"]
   end)
 
-(* As the headers (stylesheets, etc) won't change, we ask Eliom not to update
-   the <head> of the page when changing page. (This also avoids blinking when
-   changing page in iOS). *)
-let%client _ = Eliom_client.persist_document_head ()
-
-(* Define a service for the [] or '/' or root path with a GET method *)
-let%server main_service =
-  Eliom_service.create ~path:(Eliom_service.Path [])
-    ~meth:(Eliom_service.Get Eliom_parameter.unit) ()
-
-(* Insert into the client client context the server defined value *)
-let%client main_service = ~%main_service
+let main_service =
+  Eliom_service.create
+    ~path:(Eliom_service.Path [])
+    ~meth:(Eliom_service.Get Eliom_parameter.unit)
+    ()
 
 [%%shared open Eliom_content]
 [%%client
