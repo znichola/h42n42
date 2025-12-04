@@ -23,4 +23,8 @@ chown -R opam:opam .
 eval "$(opam env)"
 dune build
 
-exec "$@"
+if [ "$@" ]; then
+  exec "$@"
+else
+  make test.opt
+fi
