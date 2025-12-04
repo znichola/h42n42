@@ -69,6 +69,7 @@ type config = {
   mutable initial_creets: float;
   mutable spawn_interval: float;
   mutable infection_rate: float;
+  mutable mutation_rate: float;
   mutable disease_duration: float;
   mutable base_speed: float;
   mutable mean_speed_multiplier: float;
@@ -80,6 +81,7 @@ let game_config = {
   initial_creets = 23.0;
   spawn_interval = 3.0;
   infection_rate = 0.02;
+  mutation_rate = 0.1;
   disease_duration = 33.3;
   base_speed = 1.0;
   mean_speed_multiplier = 0.85;
@@ -353,9 +355,9 @@ let%client make_creet_sick creet =
   else (
     let type_chance = Random.float 1.0 in
     let creet_sickness =
-      if type_chance < 0.1 then
+      if type_chance < game_config.mutation_rate then
         Mean { lifetime = game_config.disease_duration }
-      else if type_chance < 0.2 then
+      else if type_chance < (game_config.mutation_rate *. 2.0) then
         Berserk { lifetime = game_config.disease_duration }
       else
         Sick { lifetime = game_config.disease_duration }
@@ -537,6 +539,14 @@ let%client config_options = [
     step = 0.001;
   };
   FloatOption {
+    label = "Mutation Rate";
+    get = (fun () -> game_config.mutation_rate);
+    set = (fun v -> game_config.mutation_rate <- v);
+    mmin = 0.01;
+    mmax = 1.0;
+    step = 0.01;
+  };
+  FloatOption {
     label = "Sickness duration";
     get = (fun () -> game_config.disease_duration);
     set = (fun v -> game_config.disease_duration <- v);
@@ -597,7 +607,6 @@ let%client create_config_input option_def =
         with _ -> ());
         Js._true
       );
-
       div ~a:[a_class ["config-row"]] 
         [ Html.D.label [txt (label ^ ": ")]
         ; input
@@ -610,9 +619,9 @@ let%client create_config_input option_def =
         ~a:(if value = current_value then [a_selected ()] else [])
         (txt value)
     ) options in
-    
+
     let select = Html.D.select option_elements in
-    
+
     let select_element = Eliom_content.Html.To_dom.of_select select in
     select_element##.onchange := Dom.handler (fun _ ->
       let idx = select_element##.selectedIndex in
@@ -621,7 +630,6 @@ let%client create_config_input option_def =
         set value;
         Js._true else Js._false
     );
-    
     div ~a:[a_class ["config-row"]] 
       [ Html.D.label [txt (label ^ ": ")]
       ; select
