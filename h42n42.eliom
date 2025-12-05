@@ -31,7 +31,7 @@ open Js_of_ocaml
 open Js_of_ocaml_lwt
 open Js_of_ocaml.Dom_html
 open Html.D
-open Lwt.Syntax
+(* open Lwt.Syntax *)
 ]
 
 (* --------------- *)
@@ -83,7 +83,7 @@ let game_config = {
   infection_rate = 0.02;
   mutation_rate = 0.1;
   disease_duration = 33.3;
-  base_speed = 1.0;
+  base_speed = 60.0;
   mean_speed_multiplier = 0.85;
   base_size = 40.0;
   creet_emoji = "🐛";
@@ -109,7 +109,7 @@ type config_option =
 let () =
   let rec track_mouse () =
     let open Lwt_js_events in
-    let* evt = mousemove window in
+    let%lwt evt = mousemove window in
     global.mouse_x <- evt##.clientX;
     global.mouse_y <- evt##.clientY;
     track_mouse ()
@@ -137,6 +137,11 @@ let%client world_component () =
 (* --------------- *)
 (* Utils           *)
 (* --------------- *)
+
+let%client get_current_time () =
+  let date = new%js Js_of_ocaml.Js.date_now in
+  (Js_of_ocaml.Js.to_float date##getTime) /. 1000.0
+  [@@warning "-unused-value-declaration"]
 
 let%client is_gameover () =
   global.game_state == ConfigScreen
@@ -185,6 +190,7 @@ type creet_state = {
   mutable health: health_status;
   mutable grabbed: bool;
   element: Html_types.div Html.elt;
+  mutable last_update: float;
 }
 [@@warning "-unused-field"]
 ]
@@ -275,6 +281,7 @@ let%client create_creet id start_x start_y =
     id;
     grabbed = false;
     health = Healthy;
+    last_update = get_current_time ();
     element = creet_div;
   }
 
@@ -287,7 +294,7 @@ let%client update_healthy_count all_creets =
   global.healthy_count <- count;
   if count = 0 then global.game_over <- true
 
-let%client update_creet_position creet all_creets =
+let%client update_creet_position creet all_creets dt =
   let size = get_creet_size creet in
   let speed = get_creet_speed creet.health in
 
@@ -315,8 +322,10 @@ let%client update_creet_position creet all_creets =
           (creet.vx, creet.vy)
     in
     creet.vx <- vx; creet.vy <- vy;
-    creet.x <- creet.x +. (creet.vx *. speed);
-    creet.y <- creet.y +. (creet.vy *. speed);
+
+    creet.x <- creet.x +. (creet.vx *. speed *. dt);
+    creet.y <- creet.y +. (creet.vy *. speed *. dt);
+
     (* Bounce off walls *)
     if creet.x <= 0.0 || creet.x >= width_f -. size then
       creet.vx <- -.creet.vx;
@@ -384,15 +393,25 @@ let%client do_disease_transmission creet all_creets =
 (* Simulation loop for a single creet using Lwt *)
 let%client rec simulate_creet creet all_creets =
   if global.game_over then Lwt.return () else (
-  if creet == List.nth !all_creets 0 then (global.tick <- global.tick + 1; update_healthy_count !all_creets);
+  if creet == List.nth !all_creets 0 then (
+    global.tick <- global.tick + 1; 
+    update_healthy_count !all_creets
+  );
 
-  let* () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
+  (* This creet waits for next frame *)
+  let%lwt () = Lwt_js_events.request_animation_frame () in
+  (* let%lwt () = Lwt.pause () in *) (* this is too greedy, trying to run a 250fps or more *)
 
-  (* Decrement lifetime and check for death *)
+  (* Calculate delta time *)
+  let current_time = get_current_time () in
+  let dt = current_time -. creet.last_update in
+  creet.last_update <- current_time;
+
+  (* Decrement lifetime and check for death using delta time *)
   let is_dead = match creet.health with
     | Healthy -> false
     | Sick { lifetime } | Berserk { lifetime } | Mean { lifetime } ->
-        let new_lifetime = lifetime -. 0.016 in
+        let new_lifetime = lifetime -. dt in
         if new_lifetime <= 0.0 then true
         else (
           creet.health <- (match creet.health with
@@ -415,8 +434,8 @@ let%client rec simulate_creet creet all_creets =
     global.creet_count <- List.length !all_creets;
     Lwt.return ()
   ) else (
-    update_creet_position creet !all_creets;
-    
+    update_creet_position creet !all_creets dt;
+
     (* Check if creet is in the river *)
     let (_, _, part_height) = get_stats () in
     let current_section = get_creet_section (part_height, creet) in
@@ -432,7 +451,6 @@ let%client rec simulate_creet creet all_creets =
     | _ -> ()
     );
 
-    (* Check for disease transmission *)
     do_disease_transmission creet !all_creets;
     simulate_creet creet all_creets
   ))
@@ -465,7 +483,7 @@ let%client creets_component () =
 
       let rec handle_mousedown () =
         let container_element = Eliom_content.Html.To_dom.of_div container in
-        let* evt = Lwt_js_events.mousedown container_element in
+        let%lwt evt = Lwt_js_events.mousedown container_element in
         let x = evt##.clientX in
         let y = evt##.clientY in
         (match List.find_opt (fun c -> is_point_in_creet c x y) !creets with
@@ -479,7 +497,7 @@ let%client creets_component () =
       Lwt.async handle_mousedown;
 
       let rec handle_mouseup () =
-        let* _ = Lwt_js_events.mouseup window in
+        let%lwt _ = Lwt_js_events.mouseup window in
         (match !grabbed_creet with
          | Some creet -> 
              creet.grabbed <- false;
@@ -494,7 +512,7 @@ let%client creets_component () =
       done;
 
       let rec spawn_loop () =
-        let* () = Lwt_js.sleep game_config.spawn_interval in
+        let%lwt () = Lwt_js.sleep game_config.spawn_interval in
         if not global.game_over then (
           spawn_creet ();
           spawn_loop ()
@@ -558,9 +576,9 @@ let%client config_options = [
     label = "Base Speed";
     get = (fun () -> game_config.base_speed);
     set = (fun v -> game_config.base_speed <- v);
-    mmin = 0.5;
-    mmax = 5.0;
-    step = 0.1;
+    mmin = 10.0;
+    mmax = 300.0;
+    step = 10.0;
   };
   FloatOption {
     label = "Mean Speed Multiplier";
@@ -684,7 +702,7 @@ let%client hud_component on_start =
     update_stats ();
 
     let rec handle_stats_update () =
-      let* () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
+      let%lwt () = Lwt_js.sleep 0.016 in (* ~60 FPS *)
       update_stats ();
       handle_stats_update ()
     in
@@ -699,7 +717,7 @@ let%client hud_component on_start =
     );
 
     let rec handle_mousemove () =
-      let* _ = Lwt_js_events.mousemove window in
+      let%lwt _ = Lwt_js_events.mousemove window in
       update_stats ();
       handle_mousemove ()
     in
