@@ -380,14 +380,16 @@ let%client make_creet_sick creet =
 let%client do_disease_transmission creet all_creets =
   match creet.health with
   | Healthy ->
-      (* Check if colliding with any sick creet *)
+    if Random.float 1.0 < game_config.infection_rate then
+    (* Check if colliding with any sick creet *)
       let sick_collision = List.exists (fun other ->
+        if other.grabbed then false else (
         match other.health with
         | Healthy -> false
         | _ -> creets_colliding creet other
-      ) all_creets in
-      
-      if sick_collision && Random.float 1.0 < 0.02 then ( make_creet_sick creet )
+      )) all_creets in
+
+      if sick_collision then ( make_creet_sick creet )
   | _ -> ()
 
 (* Simulation loop for a single creet using Lwt *)
@@ -451,7 +453,7 @@ let%client rec simulate_creet creet all_creets =
     | _ -> ()
     );
 
-    do_disease_transmission creet !all_creets;
+    if not creet.grabbed then do_disease_transmission creet !all_creets;
     simulate_creet creet all_creets
   ))
 
