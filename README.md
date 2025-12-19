@@ -84,12 +84,7 @@ The OCSIGEN framework is some big group of modules, Eliom is also a fullstack fr
 
 ```
 
-Run bash line to download opam to a 
-```zsh
-docker build -t ocaml_dev_image .
-docker run --rm -it -p 8080:8080 -v .:/home/opam/mnt ocaml_dev_image:latest bash -c "make test.byte"
-```
-folder in sgoinfre, put this in `PATH` by modifying the `.zshrc`.
+Run bash line to download opam to a folder in sgoinfre, put this in `PATH` by modifying the `.zshrc`.
 
 ```zsh
 bash -c "sh <(curl -fsSL https://opam.ocaml.org/install.sh)"
